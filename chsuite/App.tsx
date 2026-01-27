@@ -13,7 +13,7 @@ import Login from './components/Login';
 import { Button } from './components/ui/Button';
 import { RBACProvider, Guard, useRBAC } from './context/RBACContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
-.
+
 const AppContent: React.FC = () => {
   const { session, loading: authLoading } = useAuth();
   const { currentUser, currentRole, loading: rbacLoading } = useRBAC();

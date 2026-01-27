@@ -1,0 +1,8 @@
+
+{
+  "name": "ChSuite - Gestão de Despesas Corporativas",
+  "description": "Uma plataforma completa para gestão de reembolsos, adiantamentos, viagens e controle de custos corporativos com automação e dashboards inteligentes.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

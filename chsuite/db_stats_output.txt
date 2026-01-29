@@ -1,0 +1,9 @@
+Table             | Rows       | Est. Size (Raw Data)
+------------------|------------|---------------------
+expenses          | 0          | ~0.00 KB
+trips             | 0          | ~0.00 KB
+audit_logs        | 0          | ~0.00 KB
+user_profiles     | 0          | ~0.00 KB
+units             | 0          | ~0.00 KB
+------------------|------------|---------------------
+TOTAL REGISTROS   : 0

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View } from './types';
 import MainLayout from './components/MainLayout';
 import Dashboard from './components/Dashboard';
@@ -13,18 +13,38 @@ import Login from './components/Login';
 import { Button } from './components/ui/Button';
 import { RBACProvider, Guard, useRBAC } from './context/RBACContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 
 const AppContent: React.FC = () => {
   const { session, loading: authLoading } = useAuth();
   const { currentUser, currentRole, loading: rbacLoading } = useRBAC();
   const [currentView, setCurrentView] = useState<View>('dashboard');
+  const [backgroundModulesLoaded, setBackgroundModulesLoaded] = useState(false);
 
-  const loading = authLoading || rbacLoading;
+  // Consolidated load: all essential data arrived in RPC, no need for staggered delay
+  useEffect(() => {
+    if (session && !backgroundModulesLoaded) {
+      setBackgroundModulesLoaded(true);
+    }
+  }, [session, backgroundModulesLoaded]);
 
-  if (loading) {
+  // PERFORMANCE TRACKING
+  useEffect(() => {
+    if (!authLoading && !rbacLoading) {
+      const time = performance.now();
+      console.log(`%c [PERF] App fully ready in ${time.toFixed(0)}ms`, 'background: #222; color: #bada55; font-weight: bold;');
+    }
+  }, [authLoading, rbacLoading]);
+
+  // Decouple Loading: Main layout appears as soon as Auth is ready.
+  // Individual modules (Dashboard, etc.) will show their own skeletons via Guard/RBAC state.
+  if (authLoading) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-[#0a0e14]">
-        <div className="size-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="size-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest animate-pulse">Iniciando ChSuite...</p>
+        </div>
       </div>
     );
   }
@@ -32,67 +52,6 @@ const AppContent: React.FC = () => {
   if (!session) {
     return <Login />;
   }
-
-  const renderContent = () => {
-    switch (currentView) {
-      case 'dashboard':
-        return (
-          <Guard module="dashboard">
-            <Dashboard onNavigate={setCurrentView} />
-          </Guard>
-        );
-      case 'lancamentos':
-        return (
-          <Guard module="lancamentos">
-            <Lancamentos />
-          </Guard>
-        );
-      case 'colaboradores':
-        return (
-          <Guard module="colaboradores">
-            <Colaboradores />
-          </Guard>
-        );
-      case 'unidades':
-        return (
-          <Guard module="unidades">
-            <Lojas />
-          </Guard>
-        );
-      case 'viagens':
-        return (
-          <Guard module="viagens">
-            <Viagens />
-          </Guard>
-        );
-      case 'configuracoes':
-        return (
-          <Guard module="configuracoes">
-            <Configuracoes />
-          </Guard>
-        );
-      case 'tarefas':
-        return (
-          <Guard module="tarefas">
-            <Tarefas />
-          </Guard>
-        );
-      default:
-        return (
-          <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-center p-8">
-            <span className="material-symbols-outlined text-6xl text-slate-300">construction</span>
-            <h2 className="text-2xl font-black tracking-tight dark:text-white">Módulo em Desenvolvimento</h2>
-            <p className="text-slate-500">Estamos trabalhando para trazer a funcionalidade de <b>{currentView}</b> o mais rápido possível.</p>
-            <Button
-              onClick={() => setCurrentView('dashboard')}
-              icon="arrow_back"
-            >
-              Voltar ao Dashboard
-            </Button>
-          </div>
-        );
-    }
-  };
 
   const getTitle = () => {
     const isAdmin = currentUser.roleId === 'r_admin_pro' || (currentRole && currentRole.isSystemAdmin) || currentRole?.name.toLowerCase() === 'administrador';
@@ -115,7 +74,70 @@ const AppContent: React.FC = () => {
       onNavigate={setCurrentView}
       title={getTitle()}
     >
-      {renderContent()}
+      {/* Persistently Mounted Core Views (for instant switching & state preservation) */}
+      <div className={currentView === 'dashboard' ? 'contents' : 'hidden'}>
+        <Guard module="dashboard">
+          <Dashboard onNavigate={setCurrentView} />
+        </Guard>
+      </div>
+
+      <div className={currentView === 'lancamentos' ? 'contents' : 'hidden'}>
+        {(currentView === 'lancamentos' || backgroundModulesLoaded) && (
+          <Guard module="lancamentos">
+            <Lancamentos />
+          </Guard>
+        )}
+      </div>
+
+      <div className={currentView === 'viagens' ? 'contents' : 'hidden'}>
+        {(currentView === 'viagens' || backgroundModulesLoaded) && (
+          <Guard module="viagens">
+            <Viagens />
+          </Guard>
+        )}
+      </div>
+
+      <div className={currentView === 'tarefas' ? 'contents' : 'hidden'}>
+        {(currentView === 'tarefas' || backgroundModulesLoaded) && (
+          <Guard module="tarefas">
+            <Tarefas />
+          </Guard>
+        )}
+      </div>
+
+      {/* Conditionally Mounted Administrative/Settings Views (rarely toggled, saves initial memory) */}
+      {currentView === 'colaboradores' && (
+        <Guard module="colaboradores">
+          <Colaboradores />
+        </Guard>
+      )}
+
+      {currentView === 'unidades' && (
+        <Guard module="unidades">
+          <Lojas />
+        </Guard>
+      )}
+
+      {currentView === 'configuracoes' && (
+        <Guard module="configuracoes">
+          <Configuracoes />
+        </Guard>
+      )}
+
+      {/* Fallback for unknown views */}
+      {!['dashboard', 'lancamentos', 'viagens', 'tarefas', 'colaboradores', 'unidades', 'configuracoes'].includes(currentView) && (
+        <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-center p-8">
+          <span className="material-symbols-outlined text-6xl text-slate-300">construction</span>
+          <h2 className="text-2xl font-black tracking-tight dark:text-white">Módulo em Desenvolvimento</h2>
+          <p className="text-slate-500">Estamos trabalhando para trazer a funcionalidade de <b>{currentView}</b> o mais rápido possível.</p>
+          <Button
+            onClick={() => setCurrentView('dashboard')}
+            icon="arrow_back"
+          >
+            Voltar ao Dashboard
+          </Button>
+        </div>
+      )}
     </MainLayout>
   );
 };
@@ -123,9 +145,11 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <RBACProvider>
-        <AppContent />
-      </RBACProvider>
+      <ToastProvider>
+        <RBACProvider>
+          <AppContent />
+        </RBACProvider>
+      </ToastProvider>
     </AuthProvider>
   );
 };

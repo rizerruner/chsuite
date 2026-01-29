@@ -33,13 +33,13 @@ const getUpcomingDate = (hoursAhead: number) => {
 };
 
 export const MOCK_EXPENSES: Expense[] = [
-  { id: '1', collaborator: 'Ricardo Silveira', unit: 'Loja São Paulo', category: 'Alimentação', date: '2024-05-12', value: 84.50, paymentMethod: 'Dinheiro', status: 'Aprovado' },
-  { id: '2', collaborator: 'Amanda Costa', unit: 'Matriz', category: 'Combustível', date: '2024-05-11', value: 250.00, paymentMethod: 'Cartão', status: 'Pendente' },
-  { id: '3', collaborator: 'Carlos Oliveira', unit: 'Loja Rio de Janeiro', category: 'Hospedagem', date: '2024-05-10', value: 420.00, paymentMethod: 'Cartão', status: 'Aprovado' },
-  { id: '4', collaborator: 'Beatriz Santos', unit: 'Loja Curitiba', category: 'Transporte (App)', date: '2024-05-09', value: 55.00, paymentMethod: 'Dinheiro', status: 'Paga' },
-  { id: '5', collaborator: 'Ricardo Silveira', unit: 'Loja São Paulo', category: 'Combustível', date: '2024-05-13', value: 180.00, paymentMethod: 'Cartão', status: 'Aprovado' },
-  { id: '6', collaborator: 'João Silva', unit: 'Matriz', category: 'Alimentação', date: '2024-05-14', value: 45.90, paymentMethod: 'Dinheiro', status: 'Pendente' },
-  { id: '7', collaborator: 'Amanda Costa', unit: 'Matriz', category: 'Hospedagem', date: '2024-05-15', value: 310.00, paymentMethod: 'Cartão', status: 'Aprovado' },
+  { id: '1', collaborator: 'Ricardo Silveira', unit: 'Loja São Paulo', category: 'Alimentação', date: '2026-05-12', value: 84.50, paymentMethod: 'Dinheiro', status: 'Aprovado' },
+  { id: '2', collaborator: 'Amanda Costa', unit: 'Matriz', category: 'Combustível', date: '2026-05-11', value: 250.00, paymentMethod: 'Cartão', status: 'Pendente' },
+  { id: '3', collaborator: 'Carlos Oliveira', unit: 'Loja Rio de Janeiro', category: 'Hospedagem', date: '2026-05-10', value: 420.00, paymentMethod: 'Cartão', status: 'Aprovado' },
+  { id: '4', collaborator: 'Beatriz Santos', unit: 'Loja Curitiba', category: 'Transporte (App)', date: '2026-05-09', value: 55.00, paymentMethod: 'Dinheiro', status: 'Paga' },
+  { id: '5', collaborator: 'Ricardo Silveira', unit: 'Loja São Paulo', category: 'Combustível', date: '2026-05-13', value: 180.00, paymentMethod: 'Cartão', status: 'Aprovado' },
+  { id: '6', collaborator: 'João Silva', unit: 'Matriz', category: 'Alimentação', date: '2026-05-14', value: 45.90, paymentMethod: 'Dinheiro', status: 'Pendente' },
+  { id: '7', collaborator: 'Amanda Costa', unit: 'Matriz', category: 'Hospedagem', date: '2026-05-15', value: 310.00, paymentMethod: 'Cartão', status: 'Aprovado' },
 ];
 
 export const MOCK_LOJAS: Loja[] = [
@@ -49,8 +49,8 @@ export const MOCK_LOJAS: Loja[] = [
 ];
 
 export const MOCK_TRIPS: Trip[] = [
-  { id: 't1', collaborator: 'João Silva', avatar: 'https://i.pravatar.cc/150?u=joao', role: 'Supervisor Comercial', units: ['Matriz', 'Filial Norte'], startDate: getUpcomingDate(12), endDate: '2024-10-20', estimatedCost: 1250.00, status: 'Em curso', actionPlan: ['Verificar estoque', 'Reunião com gerente local'] },
-  { id: 't2', collaborator: 'Maria Oliveira', avatar: 'https://i.pravatar.cc/150?u=maria', role: 'Gerente Regional', units: ['Shopping Center', 'Centro'], startDate: '2024-12-18', endDate: '2024-12-22', estimatedCost: 980.00, status: 'Agendada', actionPlan: ['Auditoria financeira', 'Treinamento de equipe'] },
+  { id: 't1', collaborator: 'João Silva', avatar: 'https://i.pravatar.cc/150?u=joao', role: 'Supervisor Comercial', units: ['Matriz', 'Filial Norte'], startDate: getUpcomingDate(12), endDate: '2026-10-20', estimatedCost: 1250.00, status: 'Em curso', actionPlan: ['Verificar estoque', 'Reunião com gerente local'] },
+  { id: 't2', collaborator: 'Maria Oliveira', avatar: 'https://i.pravatar.cc/150?u=maria', role: 'Gerente Regional', units: ['Shopping Center', 'Centro'], startDate: '2026-12-18', endDate: '2026-12-22', estimatedCost: 980.00, status: 'Agendada', actionPlan: ['Auditoria financeira', 'Treinamento de equipe'] },
 ];
 
 export const MOCK_COLABORADORES: User[] = [

@@ -5,6 +5,7 @@ import { View, Expense, Trip, UserProfile, Loja } from '../types';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
+import { EmptyState } from './ui/EmptyState';
 import { useRBAC } from '../context/RBACContext';
 import { supabase } from '../lib/supabase';
 
@@ -12,46 +13,81 @@ interface DashboardProps {
   onNavigate?: (view: View) => void;
 }
 
+import { getAvatarUrl } from '../utils/imageUtils';
+
 const COLORS = ['#195de6', '#fbbf24', '#22c55e', '#ef4444', '#cbd5e1', '#8b5cf6'];
 
+const DashboardSkeleton = () => (
+  <div className="space-y-8 animate-pulse p-4 lg:p-8">
+    <div className="flex justify-between items-center mb-6">
+      <div className="h-8 w-48 bg-slate-200 dark:bg-slate-800 rounded-lg"></div>
+      <div className="h-10 w-32 bg-slate-200 dark:bg-slate-800 rounded-lg"></div>
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} className="h-32 bg-slate-200 dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800"></div>
+      ))}
+    </div>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="h-[400px] bg-slate-100 dark:bg-slate-900 rounded-3xl"></div>
+      <div className="h-[400px] bg-slate-100 dark:bg-slate-900 rounded-3xl"></div>
+    </div>
+  </div>
+);
+
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
-  const { currentUser, users } = useRBAC();
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [units, setUnits] = useState<Loja[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { currentUser, users, initialDashboardData } = useRBAC();
+
+  // Instant Hydration: Initialize state from Context if available
+  const [expenses, setExpenses] = useState<Expense[]>(() => initialDashboardData?.expenses || []);
+  const [trips, setTrips] = useState<Trip[]>(() => initialDashboardData?.trips || []);
+
+  const [loading, setLoading] = useState(!initialDashboardData);
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   const fetchData = async () => {
     try {
+      console.time('Dashboard_FetchData');
       setLoading(true);
 
-      // Fetch Expenses
-      const { data: expensesData } = await supabase
-        .from('expenses')
-        .select('*');
+      // 1. Calculate Period for Server-side Filtering
+      const year = selectedDate.getFullYear();
+      const month = selectedDate.getMonth();
+      const firstDayOfLastMonth = new Date(year, month - 1, 1).toISOString().split('T')[0];
+      const lastDayOfCurrentMonth = new Date(year, month + 1, 0).toISOString().split('T')[0];
 
-      // Fetch Trips
-      const { data: tripsData } = await supabase
-        .from('trips')
-        .select('*');
+      // 2. Fetch DATA in PARALLEL with COLUMN LIMITING for performance
+      const [
+        { data: expensesData, error: expError },
+        { data: tripsData, error: tripsError }
+      ] = await Promise.all([
+        supabase
+          .from('expenses')
+          .select('unit, category, payment_method, value, date, collaborator')
+          .gte('date', firstDayOfLastMonth)
+          .lte('date', lastDayOfCurrentMonth),
+        supabase
+          .from('trips')
+          .select('id, collaborator, avatar, role, units, start_date, end_date, estimated_cost, status')
+          .gte('start_date', firstDayOfLastMonth)
+          .lte('start_date', lastDayOfCurrentMonth)
+      ]);
 
-      // Fetch Units
-      const { data: unitsData } = await supabase
-        .from('units')
-        .select('*');
+      console.timeEnd('Dashboard_FetchData');
+      console.time('Dashboard_Processing');
+
+      if (expError) throw expError;
+      if (tripsError) throw tripsError;
 
       if (expensesData) {
         setExpenses(expensesData.map((e: any) => ({
-          id: e.id,
           unit: e.unit,
           category: e.category,
           paymentMethod: e.payment_method,
           value: Number(e.value),
           date: e.date,
-          collaborator: e.collaborator,
-          status: e.status
-        })));
+          collaborator: e.collaborator
+        })) as any);
       }
 
       if (tripsData) {
@@ -64,21 +100,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           startDate: t.start_date,
           endDate: t.end_date,
           estimatedCost: Number(t.estimated_cost),
-          status: t.status as any,
-          actionPlan: t.action_plan || []
-        })));
+          status: t.status as any
+        })) as any);
       }
-
-      if (unitsData) {
-        setUnits(unitsData.map((u: any) => ({
-          id: u.id,
-          name: u.name,
-          city: u.city,
-          manager: u.manager,
-          distanceFromMatrix: u.distance_from_matrix,
-          status: u.status
-        })));
-      }
+      console.timeEnd('Dashboard_Processing');
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -88,8 +113,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    const isCurrentMonth = selectedDate.getMonth() === new Date().getMonth() &&
+      selectedDate.getFullYear() === new Date().getFullYear();
+
+    // Only fetch if NOT the current month OR if we don't have hydration yet
+    if (!(isCurrentMonth && initialDashboardData && (expenses.length > 0 || trips.length > 0))) {
+      fetchData();
+    }
+  }, [selectedDate, initialDashboardData]);
 
   // 1. Cálculos de Estatísticas (Stats)
   // 1. Definição do Período Atual
@@ -230,19 +261,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       .sort((a, b) => b.value - a.value);
   }, [currentMonthExpenses]);
 
-  // 3.1 Cálculo para Frequência de Visitas (Sidebar)
+  // 3.1 Cálculo para Frequência de Visitas (Sidebar) - Optimized
   const visitData = useMemo(() => {
     const visitMap: Record<string, number> = {};
-    units.forEach(u => {
-      visitMap[u.name] = 0;
-    });
 
+    // We don't bother pre-filling from units, just count what exists in trips
     trips.forEach(trip => {
       if (trip.units && Array.isArray(trip.units)) {
         trip.units.forEach(unitName => {
-          if (visitMap[unitName] !== undefined) {
-            visitMap[unitName] += 1;
-          }
+          visitMap[unitName] = (visitMap[unitName] || 0) + 1;
         });
       }
     });
@@ -250,9 +277,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     return Object.entries(visitMap)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [units, trips]);
+  }, [trips]);
 
   // 5. Cálculo do Ranking de Colaboradores - Mês Atual
+  const userMap = useMemo(() => {
+    const map = new Map<string, UserProfile>();
+    if (Array.isArray(users)) {
+      users.forEach(u => map.set(u.name, u));
+    }
+    return map;
+  }, [users]);
+
   const ranking = useMemo(() => {
     const stats: Record<string, { total: number; count: number }> = {};
 
@@ -267,8 +302,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
     return Object.entries(stats)
       .map(([name, data]) => {
-        // Try to find profile by name
-        const colabInfo = users.find(c => c.name === name);
+        const colabInfo = userMap.get(name);
         return {
           name,
           total: data.total,
@@ -278,7 +312,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       })
       .sort((a, b) => b.total - a.total)
       .slice(0, 5);
-  }, [currentMonthExpenses, users]);
+  }, [currentMonthExpenses, userMap]);
 
   const maxExpenseInRanking = ranking.length > 0 ? ranking[0].total : 0;
 
@@ -299,12 +333,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">Carregando indicadores...</p>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
@@ -402,23 +431,32 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           </CardHeader>
           <CardContent>
             <div className="h-64 mt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={expenseBarData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                  <Tooltip
-                    cursor={{ fill: '#f8fafc' }}
-                    formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
-                  />
-                  <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={40}>
-                    {expenseBarData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              {expenseBarData.length === 0 ? (
+                <EmptyState
+                  icon="bar_chart"
+                  title="Sem dados"
+                  description="Nenhuma despesa registrada para exibir."
+                  compact
+                />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={expenseBarData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                    <Tooltip
+                      cursor={{ fill: '#f8fafc' }}
+                      formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                    />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={40}>
+                      {expenseBarData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -433,24 +471,32 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           </CardHeader>
           <CardContent>
             <div className="h-48 relative mt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={8}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value: number) => `${value}%`} />
-                </PieChart>
-              </ResponsiveContainer>
+              {pieData.length === 0 ? (
+                <EmptyState
+                  icon="pie_chart"
+                  title="Sem categorias"
+                  compact
+                />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={8}
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: number) => `${value}%`} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </div>
             <div className="mt-6 space-y-3">
               {pieData.map((item, i) => (
@@ -481,39 +527,49 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
               <div className="flex flex-col gap-6">
-                {ranking.map((colab, index) => (
-                  <div key={index} className="flex flex-col gap-2">
-                    <div className="flex justify-between items-end">
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          {colab.avatar ? (
-                            <img src={colab.avatar} alt={colab.name} className="size-10 rounded-full border-2 border-white dark:border-slate-800 shadow-sm object-cover" />
-                          ) : (
-                            <div className="size-10 rounded-full border-2 border-white dark:border-slate-800 shadow-sm bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                              <span className="text-xs font-black text-slate-400 uppercase">{colab.name.charAt(0)}</span>
-                            </div>
-                          )}
-                          <span className="absolute -top-1 -right-1 size-5 bg-primary text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
-                            {index + 1}
-                          </span>
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-[#111318] dark:text-white leading-tight">{colab.name}</span>
-                          <span className="text-[10px] text-slate-400 uppercase font-black tracking-tighter">{colab.count} lançamentos</span>
-                        </div>
-                      </div>
-                      <div className="text-right flex flex-col">
-                        <span className="text-sm font-black text-primary">R$ {colab.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                      </div>
-                    </div>
-                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="bg-primary h-full transition-all duration-1000 ease-out"
-                        style={{ width: `${(colab.total / maxExpenseInRanking) * 100}%` }}
-                      />
-                    </div>
+                {ranking.length === 0 ? (
+                  <div className="flex-1 flex items-center justify-center p-8">
+                    <EmptyState
+                      icon="leaderboard"
+                      title="Sem ranking"
+                      description="Nenhum lançamento registrado para este período."
+                    />
                   </div>
-                ))}
+                ) : (
+                  ranking.map((colab, index) => (
+                    <div key={index} className="flex flex-col gap-2">
+                      <div className="flex justify-between items-end">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            {getAvatarUrl(colab.avatar) ? (
+                              <img src={getAvatarUrl(colab.avatar)!} alt={colab.name} className="size-10 rounded-full border-2 border-white dark:border-slate-800 shadow-sm object-cover" />
+                            ) : (
+                              <div className="size-10 rounded-full border-2 border-white dark:border-slate-800 shadow-sm bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                                <span className="text-xs font-black text-slate-400 uppercase">{colab.name.charAt(0)}</span>
+                              </div>
+                            )}
+                            <span className="absolute -top-1 -right-1 size-5 bg-primary text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
+                              {index + 1}
+                            </span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-[#111318] dark:text-white leading-tight">{colab.name}</span>
+                            <span className="text-[10px] text-slate-400 uppercase font-black tracking-tighter">{colab.count} lançamentos</span>
+                          </div>
+                        </div>
+                        <div className="text-right flex flex-col">
+                          <span className="text-sm font-black text-primary">R$ {colab.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div
+                          className="bg-primary h-full transition-all duration-1000 ease-out"
+                          style={{ width: `${(colab.total / maxExpenseInRanking) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
 
               <Card className="flex flex-col h-full bg-white dark:bg-slate-900/40 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
@@ -525,23 +581,32 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="h-48 mb-6">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={visitData.slice(0, 4)} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                        <XAxis type="number" hide />
-                        <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontBold: 800, fill: '#64748b' }} width={60} />
-                        <Tooltip
-                          cursor={{ fill: '#f8fafc' }}
-                          formatter={(value: number) => [`${value} ${value === 1 ? 'visita' : 'visitas'}`, 'Total']}
-                          contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px', fontSize: '10px' }}
-                        />
-                        <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={15}>
-                          {visitData.slice(0, 4).map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                    {visitData.length === 0 ? (
+                      <EmptyState
+                        icon="explore"
+                        title="Sem visitas"
+                        description="Nenhum roteiro concluído este mês."
+                        compact
+                      />
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={visitData.slice(0, 4)} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                          <XAxis type="number" hide />
+                          <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontBold: 800, fill: '#64748b' }} width={60} />
+                          <Tooltip
+                            cursor={{ fill: '#f8fafc' }}
+                            formatter={(value: number) => [`${value} ${value === 1 ? 'visita' : 'visitas'}`, 'Total']}
+                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px', fontSize: '10px' }}
+                          />
+                          <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={15}>
+                            {visitData.slice(0, 4).map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
                   </div>
 
                   <div className="space-y-3">

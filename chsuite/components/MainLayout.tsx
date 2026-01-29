@@ -63,7 +63,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, currentView, onNaviga
 
                 <footer className="mt-auto py-8 text-center border-t border-[#dcdfe5] dark:border-slate-800">
                     <p className="text-xs text-[#636f88] dark:text-gray-500 font-medium uppercase tracking-widest">
-                        © 2024 ChSuite Corporate. Todos os direitos reservados.
+                        © {new Date().getFullYear()} ChSuite Corporate. Todos os direitos reservados.
                     </p>
                 </footer>
             </main>

@@ -1,63 +1,17 @@
 import React, { useState } from 'react';
-
-import { Trip, View } from '../types';
-import { supabase } from '../lib/supabase';
+import { View } from '../types';
 import { Badge } from './ui/Badge';
+import { useRBAC } from '../context/RBACContext';
+
+import { getAvatarUrl } from '../utils/imageUtils';
 
 interface TopBarProps {
   onNavigate?: (view: View) => void;
 }
 
 const TopBar: React.FC<TopBarProps> = ({ onNavigate }) => {
+  const { upcomingTrips } = useRBAC();
   const [showNotifications, setShowNotifications] = useState(false);
-  const [upcomingTrips, setUpcomingTrips] = useState<Trip[]>([]);
-
-  React.useEffect(() => {
-    const fetchUpcomingTrips = async () => {
-      try {
-        const now = new Date();
-        const tomorrow = new Date();
-        tomorrow.setDate(now.getDate() + 1);
-
-        const { data, error } = await supabase
-          .from('trips')
-          .select('*')
-          .gte('start_date', now.toISOString().split('T')[0])
-          .lte('start_date', tomorrow.toISOString().split('T')[0])
-          .eq('status', 'Agendada');
-
-        if (error) throw error;
-        if (data) {
-          setUpcomingTrips(data.map((t: any) => ({
-            id: t.id,
-            collaborator: t.collaborator,
-            avatar: t.avatar,
-            role: t.role,
-            units: t.units || [],
-            startDate: t.start_date,
-            endDate: t.end_date,
-            estimatedCost: Number(t.estimated_cost),
-            status: t.status as any,
-            actionPlan: t.action_plan || []
-          })));
-        }
-      } catch (err) {
-        console.error('Error fetching upcoming trips for notifications:', err);
-      }
-    };
-
-    fetchUpcomingTrips();
-
-    // Subscribe to changes
-    const channel = supabase
-      .channel('topbar-trips')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, fetchUpcomingTrips)
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
 
   return (
     <div className="flex items-center gap-3">
@@ -94,7 +48,7 @@ const TopBar: React.FC<TopBarProps> = ({ onNavigate }) => {
                   upcomingTrips.map(trip => (
                     <div key={trip.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-50 dark:border-slate-800 last:border-0 cursor-pointer">
                       <div className="flex gap-3">
-                        <img src={trip.avatar} className="size-8 rounded-full shadow-sm" alt="" />
+                        <img src={getAvatarUrl(trip.avatar) || ''} className="size-8 rounded-full shadow-sm" alt="" />
                         <div className="flex flex-col gap-0.5">
                           <p className="text-xs font-bold dark:text-white">Viagem começando em breve!</p>
                           <p className="text-[11px] text-slate-500 line-clamp-2">

@@ -4,6 +4,7 @@ import { View } from '../types';
 import { MENU_ITEMS } from '../constants';
 import { useRBAC } from '../context/RBACContext';
 import { useAuth } from '../context/AuthContext';
+import { getAvatarUrl } from '../utils/imageUtils';
 
 interface SidebarProps {
   currentView: View;
@@ -63,8 +64,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate }) => {
             onClick={() => onNavigate('configuracoes')}
             className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group"
           >
-            {currentUser.avatar ? (
-              <div className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-8 flex-shrink-0" style={{ backgroundImage: `url('${currentUser.avatar}')` }}></div>
+            {getAvatarUrl(currentUser.avatar) ? (
+              <div className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-8 flex-shrink-0" style={{ backgroundImage: `url('${getAvatarUrl(currentUser.avatar)}')` }}></div>
             ) : (
               <div className="size-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center flex-shrink-0 border border-slate-200 dark:border-slate-700">
                 <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase">{currentUser.name?.charAt(0) || 'U'}</span>

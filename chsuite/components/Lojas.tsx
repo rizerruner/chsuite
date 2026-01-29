@@ -7,14 +7,20 @@ import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Card, CardContent, CardHeader } from './ui/Card';
+import { EmptyState } from './ui/EmptyState';
+import { ConfirmationModal } from './ui/ConfirmationModal';
+import { useToast } from '../context/ToastContext';
 
 const Lojas: React.FC = () => {
-  const { hasPermission, logAction } = useRBAC();
+  const { hasPermission, logAction, units: globalUnits, refreshUnits } = useRBAC();
+  const { showToast } = useToast();
   const [lojas, setLojas] = useState<Loja[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [lojaToDelete, setLojaToDelete] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Form state
@@ -23,37 +29,17 @@ const Lojas: React.FC = () => {
   const [manager, setManager] = useState('');
   const [distance, setDistance] = useState('');
 
-  const fetchLojas = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('units')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      if (data) {
-        const formattedLojas: Loja[] = data.map((unit: any) => ({
-          id: unit.id,
-          name: unit.name,
-          city: unit.city,
-          manager: unit.manager,
-          distanceFromMatrix: Number(unit.distance_from_matrix),
-          status: unit.status as 'Ativa' | 'Inativa'
-        }));
-        setLojas(formattedLojas);
-      }
-    } catch (error) {
-      console.error('Error fetching stores:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchLojas();
-  }, []);
+    const formattedLojas: Loja[] = globalUnits.map((unit: any) => ({
+      id: unit.id,
+      name: unit.name,
+      city: unit.city,
+      manager: unit.manager,
+      distanceFromMatrix: Number(unit.distance_from_matrix),
+      status: unit.status as 'Ativa' | 'Inativa'
+    }));
+    setLojas(formattedLojas);
+  }, [globalUnits]);
 
   const resetForm = () => {
     setName('');
@@ -79,17 +65,17 @@ const Lojas: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !city || !manager) {
-      alert("Por favor, preencha os campos obrigatórios.");
+      showToast("Por favor, preencha os campos obrigatórios.", "warning");
       return;
     }
 
     // Check permissions
     if (editingId && !hasPermission('unidades', 'edit')) {
-      alert("Você não tem permissão para editar unidades.");
+      showToast("Você não tem permissão para editar unidades.", "error");
       return;
     }
     if (!editingId && !hasPermission('unidades', 'create')) {
-      alert("Você não tem permissão para criar unidades.");
+      showToast("Você não tem permissão para criar unidades.", "error");
       return;
     }
 
@@ -111,6 +97,7 @@ const Lojas: React.FC = () => {
 
         if (error) throw error;
         logAction('unidades', 'edit', `Updated unit ${name}`);
+        showToast("Unidade atualizada com sucesso!");
       } else {
         // Insert
         const { error } = await supabase
@@ -119,39 +106,49 @@ const Lojas: React.FC = () => {
 
         if (error) throw error;
         logAction('unidades', 'create', `Created unit ${name}`);
+        showToast("Unidade cadastrada com sucesso!");
       }
 
       // Refresh list
-      await fetchLojas();
+      await refreshUnits();
       resetForm();
 
     } catch (error) {
       console.error("Error saving store:", error);
-      alert("Erro ao salvar loja. Tente novamente.");
+      showToast("Erro ao salvar loja. Tente novamente.", "error");
     }
   };
 
-  const handleDeleteLoja = async (id: string) => {
-    if (!window.confirm("Tem certeza que deseja excluir esta unidade? Esta ação não pode ser desfeita.")) {
-      return;
-    }
+  const handleDeleteLoja = (id: string) => {
+    setLojaToDelete(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDeleteLoja = async () => {
+    if (!lojaToDelete) return;
 
     try {
+      setLoading(true);
       const { error } = await supabase
         .from('units')
         .delete()
-        .eq('id', id);
+        .eq('id', lojaToDelete);
 
       if (error) throw error;
 
-      setLojas(lojas.filter(l => l.id !== id));
-      logAction('unidades', 'delete', `Deleted unit #${id}`);
+      setLojas(lojas.filter(l => l.id !== lojaToDelete));
+      logAction('unidades', 'delete', `Deleted unit #${lojaToDelete}`);
+      showToast("Unidade excluída com sucesso!");
 
-      if (expandedId === id) setExpandedId(null);
+      if (expandedId === lojaToDelete) setExpandedId(null);
+      setIsDeleteModalOpen(false);
+      setLojaToDelete(null);
 
     } catch (error) {
       console.error("Error deleting store:", error);
-      alert("Erro ao excluir unidade.");
+      showToast("Erro ao excluir unidade.", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -285,9 +282,14 @@ const Lojas: React.FC = () => {
                 ))}
                 {filteredLojas.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={5} className="py-20 text-center">
-                      <span className="material-symbols-outlined text-5xl text-slate-200 dark:text-slate-800 mb-2">storefront</span>
-                      <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">Nenhuma loja encontrada</p>
+                    <td colSpan={5}>
+                      <EmptyState
+                        icon="storefront"
+                        title="Nenhuma loja encontrada"
+                        description="Você ainda não cadastrou nenhuma filial. Comece adicionando sua primeira unidade."
+                        actionLabel={canCreate ? "CADASTRAR LOJA" : undefined}
+                        onAction={() => { resetForm(); setIsModalOpen(true); }}
+                      />
                     </td>
                   </tr>
                 )}
@@ -359,6 +361,16 @@ const Lojas: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => { setIsDeleteModalOpen(false); setLojaToDelete(null); }}
+        onConfirm={confirmDeleteLoja}
+        title="Excluir Unidade?"
+        message="Tem certeza que deseja excluir esta unidade? Esta ação não pode ser desfeita e pode afetar lançamentos vinculados."
+        confirmLabel="Sim, Excluir"
+        loading={loading}
+      />
     </div>
   );
 };

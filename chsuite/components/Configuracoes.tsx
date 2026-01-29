@@ -4,12 +4,15 @@ import { CURRENT_USER, PAYMENT_METHODS as INITIAL_PAYMENT_METHODS } from '../con
 import SecuritySettings from './SecuritySettings';
 import { useRBAC } from '../context/RBACContext';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { compressImage } from '../utils/imageUtils';
 
 type Tab = 'perfil' | 'preferencias' | 'organizacao' | 'seguranca';
 
 const Configuracoes: React.FC = () => {
   const { currentUser, updateUserProfile, hasPermission, currentRole } = useRBAC();
   const { resetPassword } = useAuth();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('perfil');
   const [isDarkMode, setIsDarkMode] = useState(currentUser.darkMode);
   const [isSaving, setIsSaving] = useState(false);
@@ -52,53 +55,30 @@ const Configuracoes: React.FC = () => {
     setIsDarkMode(!isDarkMode);
   };
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (readerEvent) => {
-        const image = new Image();
-        image.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_SIZE = 300;
-          let width = image.width;
-          let height = image.height;
-
-          if (width > height) {
-            if (width > MAX_SIZE) {
-              height *= MAX_SIZE / width;
-              width = MAX_SIZE;
-            }
-          } else {
-            if (height > MAX_SIZE) {
-              width *= MAX_SIZE / height;
-              height = MAX_SIZE;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(image, 0, 0, width, height);
-
-          // Compress to JPEG with 0.7 quality to save space
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-          setProfile(prev => ({ ...prev, avatar: dataUrl }));
-        };
-        image.src = readerEvent.target?.result as string;
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImage(file, 200, 0.7);
+        setProfile(prev => ({ ...prev, avatar: compressed }));
+      } catch (err) {
+        console.error("Error compressing avatar:", err);
+        showToast("Erro ao processar imagem", "danger");
+      }
     }
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (readerEvent) => {
-        setLocalOrg(prev => ({ ...prev, logo: readerEvent.target?.result as string }));
-      };
-      reader.readAsDataURL(file);
+      try {
+        // Logo can be slightly larger for clarity (400px)
+        const compressed = await compressImage(file, 400, 0.8);
+        setLocalOrg(prev => ({ ...prev, logo: compressed }));
+      } catch (err) {
+        console.error("Error compressing logo:", err);
+        showToast("Erro ao processar logo", "danger");
+      }
     }
   };
 
@@ -109,7 +89,7 @@ const Configuracoes: React.FC = () => {
       setTimeout(() => setResetSent(false), 5000);
     } catch (error) {
       console.error("Error sending reset email:", error);
-      alert("Erro ao enviar email de redefinição. Verifique se o email é válido.");
+      showToast("Erro ao enviar email de redefinição. Verifique se o email é válido.", "danger");
     }
   };
 

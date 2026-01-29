@@ -9,11 +9,15 @@ import { useRBAC, Guard } from '../context/RBACContext';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Modal } from './ui/Modal.tsx';
+import { EmptyState } from './ui/EmptyState.tsx';
+import { ConfirmationModal } from './ui/ConfirmationModal.tsx';
+import { useToast } from '../context/ToastContext';
 
 
 const Lancamentos: React.FC = () => {
-  const { logAction, currentUser, companySettings } = useRBAC();
+  const { logAction, currentUser, companySettings, units: globalUnits } = useRBAC();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [expenses, setExpenses] = useState<Expense[]>([]);
 
   const formatDate = (dateStr: string) => {
@@ -23,13 +27,15 @@ const Lancamentos: React.FC = () => {
     const [year, month, day] = parts;
     return `${day}/${month}/${year}`;
   };
-  const [units, setUnits] = useState<Loja[]>([]); // Store real units
+  const [units, setUnits] = useState<Loja[]>([]); // Store local synced units
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [paymentMethods, setPaymentMethods] = useState<string[]>(INITIAL_PAYMENT_METHODS);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
 
 
@@ -59,84 +65,86 @@ const Lancamentos: React.FC = () => {
   const [editingPaymentNewName, setEditingPaymentNewName] = useState('');
 
   // Fetch initial data
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // 1. Fetch Expenses
-        const { data: expensesData, error: expError } = await supabase
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // 1. Calculate Period for Filtering
+      const year = selectedDate.getFullYear();
+      const month = selectedDate.getMonth();
+      const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
+      const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
+
+      // 2. Fetch DATA in PARALLEL
+      const [
+        { data: expensesData, error: expError },
+        { data: catData, error: catError },
+        { data: payData, error: payError }
+      ] = await Promise.all([
+        supabase
           .from('expenses')
           .select('*')
-          .order('date', { ascending: false });
-
-        if (expError) throw expError;
-
-        if (expensesData) {
-          const formattedExpenses: Expense[] = expensesData.map((exp: any) => ({
-            id: exp.id,
-            unit: exp.unit,
-            category: exp.category,
-            paymentMethod: exp.payment_method,
-            value: Number(exp.value),
-            date: exp.date,
-            status: exp.status,
-            collaborator: exp.collaborator || 'Sistema'
-          }));
-          setExpenses(formattedExpenses);
-        }
-
-        // 2. Fetch Units (Lojas) for Dropdown
-        const { data: unitsData, error: unitsError } = await supabase
-          .from('units')
-          .select('*')
-          .eq('status', 'Ativa'); // Only active stores
-
-        if (unitsError) throw unitsError;
-
-        if (unitsData) {
-          const formattedUnits: Loja[] = unitsData.map((u: any) => ({
-            id: u.id,
-            name: u.name,
-            city: u.city,
-            manager: u.manager,
-            distanceFromMatrix: u.distance_from_matrix,
-            status: u.status
-          }));
-          setUnits(formattedUnits);
-        }
-
-        // 3. Fetch Categories
-        const { data: catData, error: catError } = await supabase
+          .gte('date', firstDay)
+          .lte('date', lastDay)
+          .order('date', { ascending: false }),
+        supabase
           .from('expense_categories')
           .select('name')
-          .order('name');
-
-        if (catError) throw catError;
-
-        if (catData && catData.length > 0) {
-          setCategories(catData.map((c: any) => c.name));
-        }
-
-        // 4. Fetch Payment Methods
-        const { data: payData, error: payError } = await supabase
+          .order('name'),
+        supabase
           .from('payment_methods')
           .select('name')
-          .order('name');
+          .order('name')
+      ]);
 
-        if (payError) throw payError;
+      if (expError) throw expError;
+      if (catError) throw catError;
+      if (payError) throw payError;
 
-        if (payData && payData.length > 0) {
-          setPaymentMethods(payData.map((p: any) => p.name));
-        }
-
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      } finally {
-        setLoading(false);
+      // 3. Process and Update State
+      if (expensesData) {
+        setExpenses(expensesData.map((exp: any) => ({
+          id: exp.id,
+          unit: exp.unit,
+          category: exp.category,
+          paymentMethod: exp.payment_method,
+          value: Number(exp.value),
+          date: exp.date,
+          status: exp.status,
+          collaborator: exp.collaborator || 'Sistema'
+        })));
       }
-    };
+
+
+
+      if (catData && catData.length > 0) {
+        setCategories(catData.map((c: any) => c.name));
+      }
+
+      if (payData && payData.length > 0) {
+        setPaymentMethods(payData.map((p: any) => p.name));
+      }
+
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedDate]);
+
+  useEffect(() => {
+    setUnits(globalUnits.map((u: any) => ({
+      id: u.id,
+      name: u.name,
+      city: u.city,
+      manager: u.manager,
+      distanceFromMatrix: u.distance_from_matrix,
+      status: u.status
+    })));
+  }, [globalUnits]);
 
   // Period Info for Month Filtering
   const periodInfo = useMemo(() => {
@@ -232,6 +240,33 @@ const Lancamentos: React.FC = () => {
     if (low.includes('pix')) return 'account_balance';
     if (low.includes('transferência')) return 'sync_alt';
     return 'account_balance_wallet';
+  };
+
+  const getPaymentStyle = (method: string) => {
+    const low = method.toLowerCase();
+    if (low.includes('dinheiro')) return { color: '#f59e0b', bg: 'bg-amber-500/10' };
+    if (low.includes('cartão')) return { color: '#3b82f6', bg: 'bg-blue-500/10' };
+    if (low.includes('pix')) return { color: '#10b981', bg: 'bg-emerald-500/10' };
+    if (low.includes('transferência')) return { color: '#8b5cf6', bg: 'bg-violet-500/10' };
+    return { color: '#64748b', bg: 'bg-slate-500/10' };
+  };
+
+  const getCategoryColor = (cat: string) => {
+    let hash = 0;
+    for (let i = 0; i < cat.length; i++) {
+      hash = cat.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h = Math.abs(hash % 360);
+    return `hsla(${h}, 70%, 45%, 1)`;
+  };
+
+  const getCategoryBg = (cat: string) => {
+    let hash = 0;
+    for (let i = 0; i < cat.length; i++) {
+      hash = cat.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h = Math.abs(hash % 360);
+    return `hsla(${h}, 70%, 45%, 0.1)`;
   };
 
   const handlePrintFullHistory = () => {
@@ -533,7 +568,6 @@ const Lancamentos: React.FC = () => {
               <div><span class="label">Categoria</span><span class="value">${exp.category}</span></div>
               <div style="grid-column: span 2;"><span class="label">Colaborador Responsável</span><span class="value">${exp.collaborator}</span></div>
               <div><span class="label">Forma de Pagamento</span><span class="value">${exp.paymentMethod}</span></div>
-              <div><span class="label">Status Atual</span><span class="value" style="color: ${exp.status === 'Aprovado' || exp.status === 'Paga' ? '#10b981' : '#f59e0b'}">${exp.status}</span></div>
             </div>
           </div>
           
@@ -569,7 +603,7 @@ const Lancamentos: React.FC = () => {
       setNewPaymentName('');
     } catch (error) {
       console.error("Error adding payment method:", error);
-      alert("Erro ao adicionar meio de pagamento.");
+      showToast("Erro ao adicionar meio de pagamento.", "error");
     }
   };
 
@@ -607,7 +641,7 @@ const Lancamentos: React.FC = () => {
 
     } catch (error) {
       console.error("Error updating payment method:", error);
-      alert("Erro ao atualizar meio de pagamento.");
+      showToast("Erro ao atualizar meio de pagamento.", "error");
     }
   };
 
@@ -624,7 +658,7 @@ const Lancamentos: React.FC = () => {
       }
     } catch (error) {
       console.error("Error removing payment method:", error);
-      alert("Erro ao remover meio de pagamento.");
+      showToast("Erro ao remover meio de pagamento.", "error");
     }
   };
 
@@ -641,7 +675,7 @@ const Lancamentos: React.FC = () => {
       setNewCategoryName('');
     } catch (error) {
       console.error("Error adding category:", error);
-      alert("Erro ao adicionar categoria.");
+      showToast("Erro ao adicionar categoria.", "error");
     }
   };
 
@@ -679,7 +713,7 @@ const Lancamentos: React.FC = () => {
 
     } catch (error) {
       console.error("Error updating category:", error);
-      alert("Erro ao atualizar categoria.");
+      showToast("Erro ao atualizar categoria.", "error");
     }
   };
 
@@ -696,14 +730,14 @@ const Lancamentos: React.FC = () => {
       }
     } catch (error) {
       console.error("Error removing category:", error);
-      alert("Erro ao remover categoria.");
+      showToast("Erro ao remover categoria.", "error");
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!unit || !category || !paymentMethod || !value || !date) {
-      alert("Por favor, preencha todos os campos.");
+      showToast("Por favor, preencha todos os campos.", "warning");
       return;
     }
 
@@ -733,59 +767,55 @@ const Lancamentos: React.FC = () => {
         if (error) throw error;
 
         logAction('lancamentos', 'create', `Created new expense for ${unit}`);
+        showToast("Lançamento criado com sucesso!");
       }
 
-      // Refresh Data
-      const { data } = await supabase.from('expenses').select('*').order('date', { ascending: false });
-      if (data) {
-        const formattedExpenses: Expense[] = data.map((exp: any) => ({
-          id: exp.id,
-          unit: exp.unit,
-          category: exp.category,
-          paymentMethod: exp.payment_method,
-          value: Number(exp.value),
-          date: exp.date,
-          status: exp.status,
-          collaborator: exp.collaborator || 'Sistema'
-        }));
-        setExpenses(formattedExpenses);
-      }
-
+      await fetchData(); // Refresh data using optimized fetch
       resetForm();
 
     } catch (error) {
       console.error("Error saving expense:", error);
-      alert("Erro ao salvar lançamento.");
+      showToast("Erro ao salvar lançamento.", "error");
     }
   };
 
-  const handleDeleteExpense = async (id: string) => {
-    if (!window.confirm("Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita.")) {
-      return;
-    }
+  const handleDeleteExpense = (id: string) => {
+    setExpenseToDelete(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDeleteExpense = async () => {
+    if (!expenseToDelete) return;
 
     try {
+      setLoading(true);
       const { error } = await supabase
         .from('expenses')
         .delete()
-        .eq('id', id);
+        .eq('id', expenseToDelete);
 
       if (error) throw error;
 
-      setExpenses(expenses.filter(exp => exp.id !== id));
-      logAction('lancamentos', 'delete', `Deleted expense #${id}`);
+      setExpenses(expenses.filter(exp => exp.id !== expenseToDelete));
+      logAction('lancamentos', 'delete', `Deleted expense #${expenseToDelete}`);
+      showToast("Lançamento excluído com sucesso!");
 
-      if (expandedId === id) setExpandedId(null);
+      if (expandedId === expenseToDelete) setExpandedId(null);
+      setIsDeleteModalOpen(false);
+      setExpenseToDelete(null);
 
     } catch (error) {
       console.error("Error deleting expense:", error);
-      alert("Erro ao excluir lançamento.");
+      showToast("Erro ao excluir lançamento.", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter(exp => {
-      // Month Filter
+      // Month Filter logic removed as it's now handled server-side for initial load
+      // But we keep search and local date range filters for active month data
       const isWithinMonth = exp.date >= periodInfo.startCurrent && exp.date <= periodInfo.endCurrent;
       if (!isWithinMonth) return false;
 
@@ -825,7 +855,7 @@ const Lancamentos: React.FC = () => {
     <div className="flex flex-col gap-6 p-4 lg:p-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-black tracking-tight dark:text-white leading-tight">Meus Lançamentos</h1>
+          <h1 className="text-3xl font-black tracking-tight dark:text-white leading-tight">Lançamentos</h1>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-[#636f88] dark:text-gray-400 text-sm font-normal">Mês Ativo: <span className="text-primary font-bold">{periodInfo.monthLabel}</span></p>
             <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 ml-2">
@@ -924,16 +954,16 @@ const Lancamentos: React.FC = () => {
 
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left">
+            <table className="w-full text-left border-separate border-spacing-0">
               <thead>
-                <tr className="bg-gray-50/50 dark:bg-[#161b25] text-[#636f88] dark:text-gray-400 text-[10px] uppercase font-black tracking-widest border-b border-[#e5e7eb] dark:border-[#2d333d]">
-                  <th className="px-6 py-4 w-10"></th>
-                  <th className="px-6 py-4">Data</th>
-                  <th className="px-6 py-4">Loja</th>
-                  <th className="px-6 py-4">Colaborador</th>
-                  <th className="px-6 py-4 text-center">Categoria</th>
-                  <th className="px-6 py-4 text-center">Pagamento</th>
-                  <th className="px-6 py-4 text-right">Valor</th>
+                <tr className="bg-slate-50/50 dark:bg-slate-900/50 text-slate-400 dark:text-slate-500 text-[10px] uppercase font-black tracking-[0.2em] border-b border-slate-100 dark:border-slate-800">
+                  <th className="px-6 py-5 w-12 text-center border-b border-slate-100 dark:border-slate-800"></th>
+                  <th className="px-6 py-5 border-b border-slate-100 dark:border-slate-800">Data e Registro</th>
+                  <th className="px-6 py-5 border-b border-slate-100 dark:border-slate-800">Unidade / Loja</th>
+                  <th className="px-6 py-5 border-b border-slate-100 dark:border-slate-800">Responsável</th>
+                  <th className="px-6 py-5 text-center border-b border-slate-100 dark:border-slate-800">Categoria</th>
+                  <th className="px-6 py-5 text-center border-b border-slate-100 dark:border-slate-800">Pagamento</th>
+                  <th className="px-6 py-5 text-left border-b border-slate-100 dark:border-slate-800">Investimento</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e5e7eb] dark:divide-[#2d333d]">
@@ -943,56 +973,100 @@ const Lancamentos: React.FC = () => {
                   <React.Fragment key={exp.id}>
                     <tr
                       onClick={() => toggleExpand(exp.id)}
-                      className={`group cursor-pointer hover:bg-gray-50/50 dark:hover:bg-[#161b25] transition-colors ${editingId === exp.id ? 'bg-primary/5' : ''} ${expandedId === exp.id ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''}`}
+                      className={`group cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-all duration-300 border-l-4 ${expandedId === exp.id ? 'bg-slate-50/50 dark:bg-slate-800/20 border-primary' : 'border-transparent hover:border-slate-200 dark:hover:border-slate-700'}`}
                     >
-                      <td className="px-6 py-5 text-center">
-                        <span className={`material-symbols-outlined text-slate-400 transition-transform duration-300 ${expandedId === exp.id ? 'rotate-180' : ''}`}>
+                      <td className="px-6 py-5 text-center align-middle">
+                        <span className={`material-symbols-outlined text-slate-300 group-hover:text-primary transition-all duration-300 ${expandedId === exp.id ? 'rotate-180 text-primary' : ''}`}>
                           expand_more
                         </span>
                       </td>
-                      <td className="px-6 py-5 text-[13px] font-medium dark:text-gray-300">{formatDate(exp.date)}</td>
-                      <td className="px-6 py-5 font-bold text-[#111318] dark:text-white text-[14px]">{exp.unit}</td>
-                      <td className="px-6 py-5 text-[13px] text-[#636f88] dark:text-gray-400 font-medium">{exp.collaborator}</td>
-                      <td className="px-6 py-5 text-center">
-                        <Badge variant="neutral" className="lowercase font-bold tracking-normal h-4 items-center">
+                      <td className="px-6 py-5 align-middle">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[13px] font-bold text-slate-700 dark:text-gray-300">{formatDate(exp.date)}</span>
+                          <span className="text-[10px] text-slate-400 font-medium uppercase tracking-tight">Data do Gasto</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 align-middle">
+                        <div className="flex items-center gap-3">
+                          <div className="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center border border-slate-200/50 dark:border-slate-700/50 group-hover:scale-110 transition-transform duration-300">
+                            <span className="material-symbols-outlined text-[18px] text-slate-400">store</span>
+                          </div>
+                          <span className="font-bold text-[#111318] dark:text-white text-[14px]">{exp.unit}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 align-middle">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[13px] text-[#636f88] dark:text-gray-400 font-bold">{exp.collaborator}</span>
+                          <span className="text-[10px] text-slate-400 font-medium uppercase tracking-tight">Responsável</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 text-center align-middle">
+                        <Badge
+                          className="lowercase font-bold tracking-normal px-4 py-1.5 text-[11px] border-none shadow-sm"
+                          style={{
+                            backgroundColor: getCategoryBg(exp.category),
+                            color: getCategoryColor(exp.category)
+                          }}
+                        >
                           {exp.category}
                         </Badge>
                       </td>
-                      <td className="px-6 py-5 text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <span className="material-symbols-outlined text-[18px] text-slate-400">
-                            {getPaymentIcon(exp.paymentMethod)}
-                          </span>
-                          <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">
+                      <td className="px-6 py-5 text-center align-middle">
+                        <div className="flex flex-col items-center gap-1.5">
+                          <div className={`size-9 rounded-xl ${getPaymentStyle(exp.paymentMethod).bg} flex items-center justify-center group-hover:rotate-12 transition-transform duration-300`}>
+                            <span className="material-symbols-outlined text-[20px]" style={{ color: getPaymentStyle(exp.paymentMethod).color }}>
+                              {getPaymentIcon(exp.paymentMethod)}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                             {exp.paymentMethod}
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-5 text-[14px] font-black text-right dark:text-white">
-                        R$ {exp.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      <td className="px-6 py-5 text-left align-middle">
+                        <span className="text-[16px] font-black dark:text-white tabular-nums">
+                          R$ {exp.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
                       </td>
                     </tr>
                     {expandedId === exp.id && (
                       <tr className="bg-slate-50/30 dark:bg-slate-800/10 animate-in fade-in slide-in-from-top-1 duration-300">
-                        <td colSpan={7} className="px-8 py-6">
-                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
-                            <div className="flex gap-12">
-                              <div className="flex flex-col gap-1">
-                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">ID do Lançamento</p>
-                                <p className="text-sm font-bold text-slate-800 dark:text-white">#{exp.id}</p>
+                        <td colSpan={7} className="px-8 py-8">
+                          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
+                            <div className="flex flex-wrap gap-12">
+                              <div className="flex flex-col gap-1.5">
+                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
+                                  <span className="material-symbols-outlined text-[14px]">fingerprint</span>
+                                  ID Lançamento
+                                </p>
+                                <p className="text-sm font-black text-slate-800 dark:text-white bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg">#{exp.id.slice(0, 8)}</p>
+                              </div>
+                              <div className="flex flex-col gap-1.5">
+                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
+                                  <span className="material-symbols-outlined text-[14px]">person</span>
+                                  Criado por
+                                </p>
+                                <p className="text-sm font-bold text-slate-700 dark:text-gray-300">{exp.collaborator}</p>
+                              </div>
+                              <div className="flex flex-col gap-1.5">
+                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
+                                  <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+                                  Data Lançamento
+                                </p>
+                                <p className="text-sm font-bold text-slate-700 dark:text-gray-300">{formatDate(exp.date)}</p>
                               </div>
                             </div>
-                            <div className="flex gap-3 w-full sm:w-auto">
-                              <Button variant="secondary" size="sm" onClick={() => handlePrintExpense(exp)} icon="print" className="flex-1 sm:flex-none">
+                            <div className="flex gap-3 w-full lg:w-auto pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-100 dark:border-slate-800">
+                              <Button variant="secondary" size="md" onClick={() => handlePrintExpense(exp)} icon="print" className="flex-1 lg:flex-none shadow-sm h-11">
                                 IMPRIMIR
                               </Button>
                               <Guard module="lancamentos" action="edit">
-                                <Button variant="primary" size="sm" onClick={() => handleEdit(exp)} icon="edit" className="flex-1 sm:flex-none">
+                                <Button variant="primary" size="md" onClick={() => handleEdit(exp)} icon="edit" className="flex-1 lg:flex-none shadow-md h-11">
                                   EDITAR
                                 </Button>
                               </Guard>
                               <Guard module="lancamentos" action="delete">
-                                <Button variant="secondary" size="sm" onClick={() => handleDeleteExpense(exp.id)} icon="delete" className="flex-1 sm:flex-none !text-red-500 hover:!bg-red-50 dark:hover:!bg-red-900/20">
+                                <Button variant="secondary" size="md" onClick={() => handleDeleteExpense(exp.id)} icon="delete" className="flex-1 lg:flex-none !text-red-500 hover:!bg-red-50 dark:hover:!bg-red-900/20 border-red-100 dark:border-red-900/10 h-11">
                                   EXCLUIR
                                 </Button>
                               </Guard>
@@ -1005,9 +1079,14 @@ const Lancamentos: React.FC = () => {
                 ))}
                 {filteredExpenses.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={7} className="py-20 text-center">
-                      <span className="material-symbols-outlined text-5xl text-slate-200 dark:text-slate-800 mb-2">search_off</span>
-                      <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">Nenhum lançamento encontrado</p>
+                    <td colSpan={7}>
+                      <EmptyState
+                        icon="payments"
+                        title="Nenhum lançamento"
+                        description="Não encontramos gastos para este período. Comece adicionando uma nova despesa ou limpe os filtros."
+                        actionLabel="NOVO LANÇAMENTO"
+                        onAction={() => setIsModalOpen(true)}
+                      />
                     </td>
                   </tr>
                 )}
@@ -1226,6 +1305,16 @@ const Lancamentos: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => { setIsDeleteModalOpen(false); setExpenseToDelete(null); }}
+        onConfirm={confirmDeleteExpense}
+        title="Excluir Lançamento?"
+        message="Tem certeza que deseja excluir este lançamento? Esta ação removerá o registro permanentemente do sistema."
+        confirmLabel="Sim, Excluir"
+        loading={loading}
+      />
     </div>
   );
 };

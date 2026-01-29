@@ -195,7 +195,7 @@ const Login: React.FC = () => {
                 </Card>
 
                 <p className="mt-10 text-center text-slate-400 text-xs font-bold uppercase tracking-[.2em] opacity-70">
-                    &copy; 2026 {companyName.toUpperCase()} &bull; CORPORATE SOLUTIONS
+                    &copy; {new Date().getFullYear()} {companyName.toUpperCase()} &bull; CORPORATE SOLUTIONS
                 </p>
             </div>
         </div>

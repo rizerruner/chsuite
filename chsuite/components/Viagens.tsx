@@ -4,12 +4,16 @@ import { Modal } from './ui/Modal';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
+import { EmptyState } from './ui/EmptyState';
+import { useToast } from '../context/ToastContext';
 import { Input, Select } from './ui/Input';
 import { useRBAC, Guard } from '../context/RBACContext';
 import { supabase } from '../lib/supabase';
+import { ConfirmationModal } from './ui/ConfirmationModal';
 
 const Viagens: React.FC = () => {
-  const { logAction, currentUser, companySettings } = useRBAC();
+  const { logAction, currentUser, companySettings, users, units: globalUnits } = useRBAC();
+  const { showToast } = useToast();
   const getTodayString = () => new Date().toISOString().split('T')[0];
 
   const formatDate = (dateStr: string) => {
@@ -21,7 +25,7 @@ const Viagens: React.FC = () => {
   };
 
   const [trips, setTrips] = useState<Trip[]>([]);
-  const [collaborators, setCollaborators] = useState<UserProfile[]>([]);
+  // collaborators state removed, using 'users' from context instead
   const [units, setUnits] = useState<Loja[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -37,7 +41,7 @@ const Viagens: React.FC = () => {
   const [actionPlan, setActionPlan] = useState<string[]>([]);
   const [newActionItem, setNewActionItem] = useState('');
 
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [tripToDeleteId, setTripToDeleteId] = useState<string | null>(null);
 
   const [showRejectionModal, setShowRejectionModal] = useState(false);
@@ -59,41 +63,63 @@ const Viagens: React.FC = () => {
 
   const fetchTrips = async () => {
     try {
+      console.time('Viagens_FetchData');
       setLoading(true);
 
-      const { data: tripsData, error: tripsError } = await supabase
-        .from('trips')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // 1. Calculate Period for Server-side Filtering
+      const year = selectedDate.getFullYear();
+      const month = selectedDate.getMonth();
+      const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
+      const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
+
+      // 2. Fetch DATA in PARALLEL with COLUMN LIMITING
+      const [
+        { data: tripsData, error: tripsError },
+        { data: expensesData, error: expensesError }
+      ] = await Promise.all([
+        supabase
+          .from('trips')
+          .select('id, collaborator, avatar, role, units, start_date, end_date, estimated_cost, status, action_plan, rejection_reason, completion_notes')
+          .gte('start_date', firstDay)
+          .lte('start_date', lastDay)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('expenses')
+          .select('collaborator, unit, date, value')
+          .gte('date', firstDay)
+          .lte('date', lastDay)
+      ]);
+
+      console.timeEnd('Viagens_FetchData');
+      console.time('Viagens_Processing');
 
       if (tripsError) throw tripsError;
-
-      const { data: expensesData, error: expensesError } = await supabase
-        .from('expenses')
-        .select('*');
-
       if (expensesError) throw expensesError;
 
+      // 3. Process Data Efficiently
       if (expensesData) {
         setExpenses(expensesData.map((e: any) => ({
-          id: e.id,
           unit: e.unit,
-          category: e.category,
-          paymentMethod: e.payment_method,
           value: Number(e.value),
           date: e.date,
-          collaborator: e.collaborator,
-          status: e.status
-        })));
+          collaborator: e.collaborator
+        })) as any);
       }
 
       if (tripsData) {
+        // Group expenses by collaborator to speed up lookup
+        const expensesByColab: Record<string, any[]> = {};
+        (expensesData || []).forEach((exp: any) => {
+          if (!expensesByColab[exp.collaborator]) expensesByColab[exp.collaborator] = [];
+          expensesByColab[exp.collaborator].push(exp);
+        });
+
         const formattedTrips: (Trip & { actualCost: number })[] = tripsData.map((t: any) => {
-          const tripExpenses = (expensesData || []).filter((exp: any) => {
-            const isSameColab = exp.collaborator === t.collaborator;
+          // Only filter expenses for THIS collaborator (much faster than filtering all)
+          const tripExpenses = (expensesByColab[t.collaborator] || []).filter((exp: any) => {
             const isSameUnit = t.units?.includes(exp.unit);
             const isWithinDates = exp.date >= t.start_date && exp.date <= t.end_date;
-            return isSameColab && isSameUnit && isWithinDates;
+            return isSameUnit && isWithinDates;
           });
 
           const actualCost = tripExpenses.reduce((acc: number, curr: any) => acc + Number(curr.value), 0);
@@ -116,6 +142,7 @@ const Viagens: React.FC = () => {
         });
         setTrips(formattedTrips as any);
       }
+      console.timeEnd('Viagens_Processing');
     } catch (error) {
       console.error('Error fetching trips:', error);
     } finally {
@@ -123,51 +150,9 @@ const Viagens: React.FC = () => {
     }
   };
 
-  const fetchCollaborators = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*');
+  // fetchCollaborators was removed - using 'users' from useRBAC instead
 
-      if (error) throw error;
-      if (data) {
-        setCollaborators(data.map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          email: p.email,
-          avatar: p.avatar,
-          roleId: p.role_id,
-          isActive: p.is_active,
-          position: p.position
-        })));
-      }
-    } catch (error) {
-      console.error('Error fetching collaborators:', error);
-    }
-  };
 
-  const fetchUnits = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('units')
-        .select('*')
-        .eq('status', 'Ativa');
-
-      if (error) throw error;
-      if (data) {
-        setUnits(data.map((u: any) => ({
-          id: u.id,
-          name: u.name,
-          city: u.city,
-          manager: u.manager,
-          distanceFromMatrix: u.distance_from_matrix,
-          status: u.status
-        })));
-      }
-    } catch (error) {
-      console.error('Error fetching units:', error);
-    }
-  };
   // Period Info for Month Filtering
   const periodInfo = useMemo(() => {
     const month = selectedDate.toLocaleString('pt-BR', { month: 'long' });
@@ -207,11 +192,22 @@ const Viagens: React.FC = () => {
   React.useEffect(() => {
     const init = async () => {
       setLoading(true);
-      await Promise.all([fetchTrips(), fetchCollaborators(), fetchUnits()]);
+      await fetchTrips();
       setLoading(false);
     };
     init();
-  }, []);
+  }, [selectedDate]);
+
+  React.useEffect(() => {
+    setUnits(globalUnits.map((u: any) => ({
+      id: u.id,
+      name: u.name,
+      city: u.city,
+      manager: u.manager,
+      distanceFromMatrix: u.distance_from_matrix,
+      status: u.status
+    })));
+  }, [globalUnits]);
 
   // Update selectedColabId when currentUser is available
   React.useEffect(() => {
@@ -276,7 +272,7 @@ const Viagens: React.FC = () => {
 
   const handleEditClick = (trip: Trip) => {
     setEditingTripId(trip.id);
-    const colab = collaborators.find(c => c.name === trip.collaborator) || currentUser;
+    const colab = users.find(c => c.name === trip.collaborator) || currentUser;
     setSelectedColabId(colab?.id || '');
     setSelectedUnits(trip.units);
     setStartDate(trip.startDate);
@@ -308,7 +304,7 @@ const Viagens: React.FC = () => {
       }
     } catch (error) {
       console.error("Error updating trip status:", error);
-      alert("Erro ao atualizar status da viagem.");
+      showToast("Erro ao atualizar status da viagem.", "error");
     }
   };
 
@@ -332,7 +328,7 @@ const Viagens: React.FC = () => {
       setCompletionNotes('');
     } catch (error) {
       console.error("Error completing trip:", error);
-      alert("Erro ao concluir a viagem.");
+      showToast("Erro ao concluir a viagem.", "error");
     }
   };
 
@@ -729,7 +725,7 @@ const Viagens: React.FC = () => {
     e.preventDefault();
     if (!isFormValid) return;
 
-    const colab = collaborators.find(c => c.id === selectedColabId) || currentUser;
+    const colab = users.find(c => c.id === selectedColabId) || currentUser;
 
     try {
       const payload = {
@@ -765,21 +761,23 @@ const Viagens: React.FC = () => {
       }
 
       await fetchTrips();
+      showToast(editingTripId ? "Viagem atualizada!" : "Novo roteiro cadastrado com sucesso!");
       resetForm();
     } catch (error) {
       console.error("Error saving trip:", error);
-      alert("Erro ao salvar planejamento de viagem.");
+      showToast("Erro ao salvar planejamento de viagem.", "error");
     }
   };
 
   const handleDeleteClick = (id: string) => {
     setTripToDeleteId(id);
-    setShowDeleteModal(true);
+    setIsDeleteModalOpen(true);
   };
 
   const confirmDelete = async () => {
     if (tripToDeleteId) {
       try {
+        setLoading(true);
         const { error } = await supabase
           .from('trips')
           .delete()
@@ -787,22 +785,22 @@ const Viagens: React.FC = () => {
 
         if (error) throw error;
 
+        showToast("Roteiro excluído com sucesso!");
         setTrips(trips.filter(t => t.id !== tripToDeleteId));
         if (editingTripId === tripToDeleteId) resetForm();
         logAction('viagens', 'delete', `Deleted travel plan #${tripToDeleteId}`);
       } catch (error) {
         console.error("Error deleting trip:", error);
-        alert("Erro ao excluir planejamento.");
+        showToast("Erro ao excluir planejamento.", "error");
+      } finally {
+        setLoading(false);
+        setIsDeleteModalOpen(false);
+        setTripToDeleteId(null);
       }
     }
-    setShowDeleteModal(false);
-    setTripToDeleteId(null);
   };
 
-  const cancelDelete = () => {
-    setShowDeleteModal(false);
-    setTripToDeleteId(null);
-  };
+
 
   const getStatusVariant = (status: Trip['status']) => {
     switch (status) {
@@ -976,7 +974,7 @@ const Viagens: React.FC = () => {
                         <div className="flex items-center gap-4 flex-1">
                           <div className="relative">
                             {(() => {
-                              const colabInfo = collaborators.find(c => c.name === trip.collaborator);
+                              const colabInfo = users.find(c => c.name === trip.collaborator);
                               const avatarUrl = trip.avatar || colabInfo?.avatar;
 
                               if (avatarUrl) {
@@ -1207,10 +1205,13 @@ const Viagens: React.FC = () => {
                   );
                 })}
                 {filteredTrips.length === 0 && (
-                  <div className="py-20 text-center flex flex-col items-center gap-4 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-3xl">
-                    <span className="material-symbols-outlined text-6xl text-slate-200 dark:text-slate-800">search_off</span>
-                    <p className="text-slate-400 font-bold uppercase tracking-widest">Nenhum roteiro encontrado</p>
-                  </div>
+                  <EmptyState
+                    icon="search_off"
+                    title="Nenhum roteiro encontrado"
+                    description="Não encontramos planos de viagem para este período. Comece criando um novo roteiro."
+                    actionLabel="NOVO PLANEJAMENTO"
+                    onAction={() => setIsModalOpen(true)}
+                  />
                 )}
               </>
             )}
@@ -1229,7 +1230,7 @@ const Viagens: React.FC = () => {
             label="Responsável"
             value={selectedColabId}
             onChange={(e) => setSelectedColabId(e.target.value)}
-            options={collaborators.map(c => ({
+            options={users.map(c => ({
               value: c.id,
               label: `${c.name} - ${c.position}`
             }))}
@@ -1346,21 +1347,15 @@ const Viagens: React.FC = () => {
         </form>
       </Modal>
 
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <Card className="max-w-sm w-full p-8 text-center animate-in zoom-in duration-300 shadow-2xl">
-            <div className="size-20 bg-red-100/50 dark:bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
-              <span className="material-symbols-outlined text-4xl">warning</span>
-            </div>
-            <h3 className="text-xl font-black dark:text-white tracking-tight">Excluir Roteiro?</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-3 mb-8 leading-relaxed">Todos os planos e objetivos serão removidos permanentemente. Esta ação não pode ser desfeita.</p>
-            <div className="flex gap-3">
-              <Button variant="secondary" fullWidth onClick={cancelDelete} className="py-3">Cancelar</Button>
-              <Button variant="danger" fullWidth onClick={confirmDelete} className="py-3 shadow-red-500/20">Sim, Excluir</Button>
-            </div>
-          </Card>
-        </div>
-      )}
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => { setIsDeleteModalOpen(false); setTripToDeleteId(null); }}
+        onConfirm={confirmDelete}
+        title="Excluir Roteiro?"
+        message="Todos os planos e objetivos serão removidos permanentemente. Esta ação não pode ser desfeita."
+        confirmLabel="Sim, Excluir"
+        loading={loading}
+      />
 
       {showRejectionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">

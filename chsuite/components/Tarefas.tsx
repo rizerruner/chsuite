@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
+import { EmptyState } from './ui/EmptyState';
+import { useToast } from '../context/ToastContext';
 import { Input } from './ui/Input';
 import { Guard, useRBAC } from '../context/RBACContext';
 import { supabase } from '../lib/supabase';
@@ -18,6 +20,7 @@ interface Task {
 
 const Tarefas: React.FC = () => {
     const { logAction, currentUser } = useRBAC();
+    const { showToast } = useToast();
     const [tasks, setTasks] = useState<Task[]>([]);
     const [loading, setLoading] = useState(true);
     const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -88,7 +91,7 @@ const Tarefas: React.FC = () => {
             }
         } catch (error) {
             console.error("Error creating task:", error);
-            alert("Erro ao criar tarefa.");
+            showToast("Erro ao criar tarefa.", "danger");
         }
     };
 
@@ -208,7 +211,16 @@ const Tarefas: React.FC = () => {
                                             </tr>
                                         ))}
                                         {!loading && tasks.length === 0 && (
-                                            <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-400 italic">Nenhuma tarefa encontrada.</td></tr>
+                                            <tr>
+                                                <td colSpan={4}>
+                                                    <EmptyState
+                                                        icon="checklist"
+                                                        title="Nenhuma tarefa"
+                                                        description="Você não possui tarefas pendentes no momento."
+                                                        action={{ label: 'Nova Tarefa', onClick: () => document.getElementById('new-task-title')?.focus() }}
+                                                    />
+                                                </td>
+                                            </tr>
                                         )}
                                     </tbody>
                                 </table>

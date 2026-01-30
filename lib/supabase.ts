@@ -19,7 +19,11 @@ const isValidUrl = (u: any): u is string => {
 const supabaseUrl = isValidUrl(url) ? url : DEFAULT_URL;
 const supabaseAnonKey = (typeof key === 'string' && key.length > 20) ? key : DEFAULT_KEY;
 
-console.log('Initializing Supabase with URL:', supabaseUrl);
+if (import.meta.env.PROD) {
+    console.log('Production mode detected.');
+    console.log('Using Supabase URL Source:', isValidUrl(url) ? 'Environment Variable' : 'Hardcoded Fallback');
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 

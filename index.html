@@ -11,6 +11,24 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
         rel="stylesheet">
     <script>
+        window.onerror = function (msg, url, line, col, error) {
+            var body = document.body;
+            if (body) {
+                body.innerHTML = '<div style="padding: 20px; background: #fee; color: #900; border: 1px solid #c00; font-family: sans-serif;">' +
+                    '<h1>JS Error</h1><p>' + msg + '</p>' +
+                    '<pre style="font-size: 12px;">' + (error && error.stack ? error.stack : 'No stack available') + '</pre>' +
+                    '</div>';
+            } else {
+                alert('JS Error: ' + msg);
+            }
+            return false;
+        };
+        window.onunhandledrejection = function (event) {
+            console.error('Unhandled rejection:', event.reason);
+            // Optional: display this too
+        };
+    </script>
+    <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {

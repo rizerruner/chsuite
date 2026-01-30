@@ -1,0 +1,7 @@
+Triggering fresh build at 2026-01-30 #3.
+State:
+- Local branch: main (at 22176f5 + new changes)
+- vercel.json updated
+- npx confirmed
+- index.css confirmed
+- build script confirmed

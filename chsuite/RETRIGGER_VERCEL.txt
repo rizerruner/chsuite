@@ -1,0 +1,5 @@
+Triggering fresh build at 2026-01-30.
+Fixes included: 
+- npx vite build
+- index.css 404 fix
+- package.json dependencies update

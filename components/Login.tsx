@@ -12,8 +12,10 @@ const Login: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [isSignUp, setIsSignUp] = useState(false);
     const [message, setMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
-    const [companyName, setCompanyName] = useState('ChSuite');
+    const [companyName, setCompanyName] = useState('');
     const [companyLogo, setCompanyLogo] = useState('');
+    const [isSettingsLoading, setIsSettingsLoading] = useState(true);
+
 
     useEffect(() => {
         const fetchCompanySettings = async () => {
@@ -33,8 +35,9 @@ const Login: React.FC = () => {
             }
         };
 
-        fetchCompanySettings();
+        fetchCompanySettings().finally(() => setIsSettingsLoading(false));
     }, []);
+
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -86,7 +89,7 @@ const Login: React.FC = () => {
             <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-orange-500/5 blur-[120px] rounded-full animate-pulse"></div>
 
             <div className="w-full max-w-[440px] relative z-10 animate-in fade-in zoom-in-95 duration-700">
-                <div className="flex flex-col items-center mb-10">
+                <div className={`flex flex-col items-center mb-10 transition-all duration-1000 ${isSettingsLoading ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
                     {companyLogo ? (
                         <img
                             src={companyLogo}
@@ -98,8 +101,9 @@ const Login: React.FC = () => {
                             <span className="material-symbols-outlined text-[#4a3b32] text-4xl font-black group-hover:scale-110 transition-transform">data_usage</span>
                         </div>
                     )}
-                    <h1 className="text-2xl font-black text-slate-800 tracking-tighter text-center">{companyName}</h1>
+                    <h1 className="text-2xl font-black text-slate-800 tracking-tighter text-center">{companyName || 'Carregando...'}</h1>
                 </div>
+
 
                 <Card className="border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
                     <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-primary to-orange-400"></div>

@@ -12,8 +12,9 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate }) => {
-  const { currentUser, hasPermission, companySettings } = useRBAC();
+  const { currentUser, hasPermission, companySettings, loading } = useRBAC();
   const { signOut } = useAuth();
+
 
   const filteredMenuItems = MENU_ITEMS.filter(item => hasPermission(item.id, 'view'));
 
@@ -21,8 +22,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate }) => {
     <aside className="flex flex-col h-full">
       <div className="p-6 flex flex-col h-full justify-between">
         <div className="flex flex-col gap-8">
-          <div className="flex gap-3 items-center">
-            {/* ... logo ... */}
+          <div className={`flex gap-3 items-center transition-all duration-500 ${loading ? 'opacity-0 translate-x-[-10px] scale-95' : 'opacity-100 translate-x-0 scale-100'}`}>
             {companySettings.logo ? (
               <img
                 src={companySettings.logo}
@@ -37,10 +37,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate }) => {
               </div>
             )}
             <div className="flex flex-col overflow-hidden">
-              <h1 className="text-[#111318] dark:text-white text-base font-black leading-tight tracking-tight truncate">{companySettings.companyName.split(' ')[0]}</h1>
-              <p className="text-[#636f88] dark:text-slate-400 text-[10px] font-black uppercase tracking-widest truncate">{companySettings.companyName.split(' ').slice(1).join(' ') || 'Portal Business'}</p>
+              <h1 className="text-[#111318] dark:text-white text-base font-black leading-tight tracking-tight truncate">
+                {companySettings.companyName ? companySettings.companyName.split(' ')[0] : '...'}
+              </h1>
+              <p className="text-[#636f88] dark:text-slate-400 text-[10px] font-black uppercase tracking-widest truncate">
+                {companySettings.companyName ? (companySettings.companyName.split(' ').slice(1).join(' ') || 'Portal Business') : 'Carregando...'}
+              </p>
             </div>
           </div>
+
 
           <nav className="flex flex-col gap-1">
             {filteredMenuItems.map((item) => (

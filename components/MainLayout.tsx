@@ -4,6 +4,8 @@ import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import { View } from '../types';
 import { MENU_ITEMS } from '../constants';
+import { useRBAC } from '../context/RBACContext';
+
 
 interface MainLayoutProps {
     children: React.ReactNode;
@@ -13,7 +15,9 @@ interface MainLayoutProps {
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children, currentView, onNavigate, title }) => {
+    const { companySettings, loading } = useRBAC();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
 
     const handleNavigate = (view: View) => {
         onNavigate(view);
@@ -62,10 +66,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, currentView, onNaviga
                 </div>
 
                 <footer className="mt-auto py-8 text-center border-t border-[#dcdfe5] dark:border-slate-800">
-                    <p className="text-xs text-[#636f88] dark:text-gray-500 font-medium uppercase tracking-widest">
-                        © {new Date().getFullYear()} ChSuite Corporate. Todos os direitos reservados.
+                    <p className={`text-xs text-[#636f88] dark:text-gray-500 font-medium uppercase tracking-widest transition-opacity duration-1000 ${loading ? 'opacity-0' : 'opacity-100'}`}>
+                        © {new Date().getFullYear()} {companySettings.companyName || 'ChSuite Corporate'}. Todos os direitos reservados.
                     </p>
                 </footer>
+
             </main>
         </div>
     );

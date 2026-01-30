@@ -49,7 +49,7 @@ interface RBACContextType {
 const RBACContext = createContext<RBACContextType | undefined>(undefined);
 
 export const RBACProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { user: authUser } = useAuth();
+    const { user: authUser, loading: authLoading } = useAuth();
     const { showToast } = useToast();
 
     const [currentUser, setCurrentUser] = useState<User>(GUEST_USER);
@@ -65,6 +65,7 @@ export const RBACProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [initialDashboardData, setInitialDashboardData] = useState<{ expenses: Expense[], trips: Trip[] } | null>(null);
 
     const fetchGlobalData = useCallback(async (userId: string) => {
+        setLoading(true); // Explicitly enter loading state when starting fresh fetch
         try {
             console.time('RBAC_ConsolidatedFetch');
             const { data, error } = await supabase.rpc('get_app_initial_data');
@@ -186,13 +187,15 @@ export const RBACProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     useEffect(() => {
+        if (authLoading) return; // Wait for Auth context to resolve initial state
+
         if (authUser) {
             fetchGlobalData(authUser.id);
         } else {
             setLoading(false);
             setCurrentUser(GUEST_USER);
         }
-    }, [authUser, fetchGlobalData]);
+    }, [authUser, authLoading, fetchGlobalData]);
 
     useEffect(() => {
         if (currentUser.darkMode) {

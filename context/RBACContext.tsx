@@ -72,12 +72,13 @@ export const RBACProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (error) {
                 console.error("RPC Failed, falling back to individual fetches...", error);
                 // RPC failed? Fallback to standard fetches to ensure app works
-                const [rRoles, rUsers, rSettings, rUnits, rDepts] = await Promise.all([
+                const [rRoles, rUsers, rSettings, rUnits, rDepts, rLogs] = await Promise.all([
                     supabase.from('roles').select('*'),
                     supabase.from('user_profiles').select('*'),
                     supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle(),
                     supabase.from('units').select('*'),
-                    supabase.from('user_departments').select('name')
+                    supabase.from('user_departments').select('name'),
+                    supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(100)
                 ]);
 
                 // Construct a minimal data object from results
@@ -87,7 +88,7 @@ export const RBACProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     company_settings: rSettings.data,
                     units: rUnits.data,
                     departments: rDepts.data,
-                    audit_logs: [],
+                    audit_logs: rLogs.data || [],
                     dashboard: null
                 };
                 processData(fallbackData, userId);
@@ -155,7 +156,6 @@ export const RBACProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         if (data.units) setUnits(data.units);
         if (data.departments) setDepartments(data.departments.map((d: any) => d.name).sort());
-
         if (data.dashboard) {
             setInitialDashboardData({
                 expenses: data.dashboard.expenses.map((e: any) => ({
@@ -169,6 +169,18 @@ export const RBACProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }))
             });
         }
+
+        // 5. Audit Logs
+        const mappedLogs = (data.audit_logs || []).map((l: any) => ({
+            id: l.id,
+            timestamp: l.created_at || l.timestamp || new Date().toISOString(),
+            userId: l.user_id,
+            userName: l.user_name || 'Desconhecido',
+            module: l.module,
+            action: l.action,
+            details: l.details
+        }));
+        setAuditLogs(mappedLogs);
 
         setLoading(false);
     };

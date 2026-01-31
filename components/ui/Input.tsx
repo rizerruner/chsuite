@@ -38,14 +38,16 @@ export const Input: React.FC<InputProps> = ({
 
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
     label?: string;
-    options: { value: string; label: string }[];
+    options?: { value: string; label: string }[];
     error?: string;
+    children?: React.ReactNode;
 }
 
 export const Select: React.FC<SelectProps> = ({
     label,
     options,
     error,
+    children,
     className = '',
     ...props
 }) => {
@@ -57,11 +59,15 @@ export const Select: React.FC<SelectProps> = ({
                     className={`w-full h-11 px-4 pr-10 rounded-xl border-[#e5e7eb] dark:border-[#2d333d] dark:bg-[#111621] focus:ring-primary focus:border-primary text-[14px] dark:text-white appearance-none !bg-none cursor-pointer transition-all ${error ? 'border-red-500 focus:ring-red-500' : ''} ${className}`}
                     {...props}
                 >
-                    {options.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                        </option>
-                    ))}
+                    {children ? (
+                        children
+                    ) : (
+                        options?.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                            </option>
+                        ))
+                    )}
                 </select>
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                     <span className="material-symbols-outlined text-[20px]">expand_more</span>

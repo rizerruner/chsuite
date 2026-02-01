@@ -155,7 +155,12 @@ export const RBACProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 logo: data.company_settings.logo || ''
             });
         }
-        if (data.units) setUnits(data.units);
+        if (data.units) {
+            const sortedUnits = data.units.sort((a: any, b: any) =>
+                (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' })
+            );
+            setUnits(sortedUnits);
+        }
         if (data.departments) setDepartments(data.departments.map((d: any) => d.name).sort());
         if (data.dashboard) {
             setInitialDashboardData({

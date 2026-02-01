@@ -1,5 +1,6 @@
-Triggering fresh build at 2026-02-01 10:00.
+Triggering fresh build at 2026-02-01 10:35.
 Fixes included: 
-- showPicker() moved to onClick to ensure user gesture
-- Input component z-index/click transparency fix for icons
-- Removed redundant showPicker calls in Lancamentos.tsx
+- showPicker() gesture fix (Input component)
+- Global sorting of units (filiais)
+- Duplicate unit prevention in Lojas.tsx
+- Robust logout with forced redirect and larger hit area

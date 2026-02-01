@@ -40,7 +40,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const signOut = async () => {
-        await supabase.auth.signOut();
+        try {
+            await supabase.auth.signOut();
+            setSession(null);
+            setUser(null);
+            // Forced hard-redirect to clear all states and force login screen
+            window.location.href = '/';
+        } catch (err) {
+            console.error("Logout error:", err);
+            window.location.href = '/';
+        }
     };
 
     const resetPassword = async (email: string) => {

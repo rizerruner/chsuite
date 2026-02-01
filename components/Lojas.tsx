@@ -37,7 +37,7 @@ const Lojas: React.FC = () => {
       manager: unit.manager,
       distanceFromMatrix: Number(unit.distance_from_matrix),
       status: unit.status as 'Ativa' | 'Inativa'
-    }));
+    })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
     setLojas(formattedLojas);
   }, [globalUnits]);
 
@@ -77,6 +77,21 @@ const Lojas: React.FC = () => {
     if (!editingId && !hasPermission('unidades', 'create')) {
       showToast("Você não tem permissão para criar unidades.", "error");
       return;
+    }
+
+    // Check for duplicates
+    if (!editingId) {
+      const isDuplicate = lojas.some(l => l.name.trim().toLowerCase() === name.trim().toLowerCase());
+      if (isDuplicate) {
+        showToast(`A unidade "${name}" já está cadastrada.`, "warning");
+        return;
+      }
+    } else {
+      const isDuplicate = lojas.some(l => l.id !== editingId && l.name.trim().toLowerCase() === name.trim().toLowerCase());
+      if (isDuplicate) {
+        showToast(`Já existe outra unidade com o nome "${name}".`, "warning");
+        return;
+      }
     }
 
     try {

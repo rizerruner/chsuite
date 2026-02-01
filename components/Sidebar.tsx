@@ -83,11 +83,16 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate }) => {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                signOut();
+                if (window.confirm('Deseja realmente sair do sistema?')) {
+                  signOut();
+                }
               }}
-              className="ml-auto p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              className="ml-auto p-2.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all group/logout active:scale-95"
+              title="Sair do Sistema"
             >
-              <span className="material-symbols-outlined text-slate-400 hover:text-red-500 transition-colors text-[20px]">logout</span>
+              <span className="material-symbols-outlined text-slate-400 group-hover/logout:text-red-500 transition-colors text-[22px] pointer-events-none">
+                logout
+              </span>
             </button>
           </div>
         </div>

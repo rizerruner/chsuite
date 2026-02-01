@@ -1108,7 +1108,8 @@ const Lancamentos: React.FC = () => {
             onChange={(e) => setUnit(e.target.value)}
             options={[
               { value: '', label: 'Selecione uma loja' },
-              ...units.map(u => ({ value: u.name, label: u.name }))
+              ...[...units].sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' }))
+                .map(u => ({ value: u.name, label: u.name }))
             ]}
             required
           />

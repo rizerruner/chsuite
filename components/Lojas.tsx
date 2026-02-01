@@ -14,7 +14,18 @@ import { useToast } from '../context/ToastContext';
 const Lojas: React.FC = () => {
   const { hasPermission, logAction, units: globalUnits, refreshUnits } = useRBAC();
   const { showToast } = useToast();
-  const [lojas, setLojas] = useState<Loja[]>([]);
+
+  const lojas = React.useMemo(() => {
+    return globalUnits.map((unit: any) => ({
+      id: unit.id,
+      name: unit.name,
+      city: unit.city,
+      manager: unit.manager,
+      distanceFromMatrix: Number(unit.distance_from_matrix),
+      status: unit.status as 'Ativa' | 'Inativa'
+    }));
+  }, [globalUnits]);
+
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -29,17 +40,6 @@ const Lojas: React.FC = () => {
   const [manager, setManager] = useState('');
   const [distance, setDistance] = useState('');
 
-  useEffect(() => {
-    const formattedLojas: Loja[] = globalUnits.map((unit: any) => ({
-      id: unit.id,
-      name: unit.name,
-      city: unit.city,
-      manager: unit.manager,
-      distanceFromMatrix: Number(unit.distance_from_matrix),
-      status: unit.status as 'Ativa' | 'Inativa'
-    }));
-    setLojas(formattedLojas);
-  }, [globalUnits]);
 
   const resetForm = () => {
     setName('');
@@ -130,9 +130,13 @@ const Lojas: React.FC = () => {
       await refreshUnits();
       resetForm();
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving store:", error);
-      showToast("Erro ao salvar loja. Tente novamente.", "error");
+      if (error.code === '23505') {
+        showToast(`A unidade "${name}" já está cadastrada.`, "error");
+      } else {
+        showToast("Erro ao salvar loja. Tente novamente.", "error");
+      }
     }
   };
 
@@ -153,9 +157,10 @@ const Lojas: React.FC = () => {
 
       if (error) throw error;
 
-      setLojas(lojas.filter(l => l.id !== lojaToDelete));
       logAction('unidades', 'delete', `Deleted unit #${lojaToDelete}`);
       showToast("Unidade excluída com sucesso!");
+
+      await refreshUnits();
 
       if (expandedId === lojaToDelete) setExpandedId(null);
       setIsDeleteModalOpen(false);

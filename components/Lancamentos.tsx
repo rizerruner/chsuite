@@ -1149,7 +1149,6 @@ const Lancamentos: React.FC = () => {
               label="Data"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              onClick={(e) => e.currentTarget.showPicker?.()}
               type="date"
               required
             />

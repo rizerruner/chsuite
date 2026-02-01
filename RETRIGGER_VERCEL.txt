@@ -1,5 +1,5 @@
-Triggering fresh build at 2026-01-30.
+Triggering fresh build at 2026-02-01 10:00.
 Fixes included: 
-- npx vite build
-- index.css 404 fix
-- package.json dependencies update
+- showPicker() moved to onClick to ensure user gesture
+- Input component z-index/click transparency fix for icons
+- Removed redundant showPicker calls in Lancamentos.tsx

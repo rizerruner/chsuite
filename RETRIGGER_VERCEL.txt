@@ -1,6 +1,6 @@
-Triggering fresh build at 2026-02-01 10:35.
+Triggering fresh build at 2026-02-01 10:45.
 Fixes included: 
 - showPicker() gesture fix (Input component)
-- Global sorting of units (filiais)
-- Duplicate unit prevention in Lojas.tsx
+- Global sorting of units (filiais) - FIXED: now persists after refresh
+- Duplicate unit prevention in Lojas.tsx - FIXED: more robust check
 - Robust logout with forced redirect and larger hit area

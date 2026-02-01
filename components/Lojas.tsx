@@ -37,7 +37,7 @@ const Lojas: React.FC = () => {
       manager: unit.manager,
       distanceFromMatrix: Number(unit.distance_from_matrix),
       status: unit.status as 'Ativa' | 'Inativa'
-    })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    }));
     setLojas(formattedLojas);
   }, [globalUnits]);
 
@@ -80,14 +80,16 @@ const Lojas: React.FC = () => {
     }
 
     // Check for duplicates
+    const normalizedName = name.trim().replace(/\s+/g, ' ').toLowerCase();
+
     if (!editingId) {
-      const isDuplicate = lojas.some(l => l.name.trim().toLowerCase() === name.trim().toLowerCase());
+      const isDuplicate = lojas.some(l => l.name.trim().replace(/\s+/g, ' ').toLowerCase() === normalizedName);
       if (isDuplicate) {
         showToast(`A unidade "${name}" já está cadastrada.`, "warning");
         return;
       }
     } else {
-      const isDuplicate = lojas.some(l => l.id !== editingId && l.name.trim().toLowerCase() === name.trim().toLowerCase());
+      const isDuplicate = lojas.some(l => l.id !== editingId && l.name.trim().replace(/\s+/g, ' ').toLowerCase() === normalizedName);
       if (isDuplicate) {
         showToast(`Já existe outra unidade com o nome "${name}".`, "warning");
         return;

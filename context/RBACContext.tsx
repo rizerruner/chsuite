@@ -348,7 +348,12 @@ export const RBACProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const refreshUnits = async () => {
         const { data } = await supabase.from('units').select('*');
-        if (data) setUnits(data);
+        if (data) {
+            const sorted = [...data].sort((a: any, b: any) =>
+                (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' })
+            );
+            setUnits(sorted);
+        }
     };
 
     const refreshDepartments = async () => {

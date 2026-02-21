@@ -60,6 +60,7 @@ export interface Expense {
   paymentMethod: PaymentMethod;
   status: 'Aprovado' | 'Pendente' | 'Paga' | 'Reprovado';
   receiptUrl?: string;
+  description?: string;
 }
 
 export interface Loja {

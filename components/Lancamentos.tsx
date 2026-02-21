@@ -51,6 +51,7 @@ const Lancamentos: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('');
   const [value, setValue] = useState('');
   const [date, setDate] = useState('');
+  const [description, setDescription] = useState('');
 
   // Management State
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -110,7 +111,8 @@ const Lancamentos: React.FC = () => {
           value: Number(exp.value),
           date: exp.date,
           status: exp.status,
-          collaborator: exp.collaborator || 'Sistema'
+          collaborator: exp.collaborator || 'Sistema',
+          description: exp.description || ''
         })));
       }
 
@@ -188,6 +190,7 @@ const Lancamentos: React.FC = () => {
     setPaymentMethod('');
     setValue('');
     setDate('');
+    setDescription('');
     setEditingId(null);
     setIsModalOpen(false);
   };
@@ -225,6 +228,7 @@ const Lancamentos: React.FC = () => {
     setPaymentMethod(exp.paymentMethod);
     setValue(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(exp.value));
     setDate(exp.date);
+    setDescription(exp.description || '');
     setIsModalOpen(true);
   };
 
@@ -748,6 +752,7 @@ const Lancamentos: React.FC = () => {
         payment_method: paymentMethod,
         value: parseCurrencyToNumber(value),
         date,
+        description,
         collaborator: currentUser?.name || 'Usuário',
         status: 'Pendente'
       };
@@ -958,17 +963,18 @@ const Lancamentos: React.FC = () => {
               <thead>
                 <tr className="bg-slate-50/50 dark:bg-slate-900/50 text-slate-400 dark:text-slate-500 text-[10px] uppercase font-black tracking-[0.2em] border-b border-slate-100 dark:border-slate-800">
                   <th className="px-6 py-5 w-12 text-center border-b border-slate-100 dark:border-slate-800"></th>
-                  <th className="px-6 py-5 border-b border-slate-100 dark:border-slate-800">Data e Registro</th>
-                  <th className="px-6 py-5 border-b border-slate-100 dark:border-slate-800">Unidade / Loja</th>
-                  <th className="px-6 py-5 border-b border-slate-100 dark:border-slate-800">Responsável</th>
-                  <th className="px-6 py-5 text-center border-b border-slate-100 dark:border-slate-800">Categoria</th>
-                  <th className="px-6 py-5 text-center border-b border-slate-100 dark:border-slate-800">Pagamento</th>
-                  <th className="px-6 py-5 text-left border-b border-slate-100 dark:border-slate-800">Investimento</th>
+                  <th className="px-6 py-5 w-[10%] text-left border-b border-slate-100 dark:border-slate-800">Data</th>
+                  <th className="px-6 py-5 w-[18%] text-left border-b border-slate-100 dark:border-slate-800">Unidade / Loja</th>
+                  <th className="px-6 py-5 w-[12%] text-center border-b border-slate-100 dark:border-slate-800">Categoria</th>
+                  <th className="px-6 py-5 w-[20%] text-left border-b border-slate-100 dark:border-slate-800">Descrição</th>
+                  <th className="px-6 py-5 w-[12%] text-center border-b border-slate-100 dark:border-slate-800">Pagamento</th>
+                  <th className="px-6 py-5 w-[12%] text-right border-b border-slate-100 dark:border-slate-800">Valor</th>
+                  <th className="px-6 py-5 w-[16%] text-left border-b border-slate-100 dark:border-slate-800">Responsável</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e5e7eb] dark:divide-[#2d333d]">
                 {loading ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-slate-400">Carregando lançamentos...</td></tr>
+                  <tr><td colSpan={8} className="p-8 text-center text-slate-400">Carregando lançamentos...</td></tr>
                 ) : filteredExpenses.map((exp) => (
                   <React.Fragment key={exp.id}>
                     <tr
@@ -980,24 +986,18 @@ const Lancamentos: React.FC = () => {
                           expand_more
                         </span>
                       </td>
-                      <td className="px-6 py-5 align-middle">
+                      <td className="px-6 py-5 text-left align-middle">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-[13px] font-bold text-slate-700 dark:text-gray-300">{formatDate(exp.date)}</span>
                           <span className="text-[10px] text-slate-400 font-medium uppercase tracking-tight">Data do Gasto</span>
                         </div>
                       </td>
-                      <td className="px-6 py-5 align-middle">
+                      <td className="px-6 py-5 text-left align-middle">
                         <div className="flex items-center gap-3">
                           <div className="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center border border-slate-200/50 dark:border-slate-700/50 group-hover:scale-110 transition-transform duration-300">
                             <span className="material-symbols-outlined text-[18px] text-slate-400">store</span>
                           </div>
                           <span className="font-bold text-[#111318] dark:text-white text-[14px]">{exp.unit}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5 align-middle">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[13px] text-[#636f88] dark:text-gray-400 font-bold">{exp.collaborator}</span>
-                          <span className="text-[10px] text-slate-400 font-medium uppercase tracking-tight">Responsável</span>
                         </div>
                       </td>
                       <td className="px-6 py-5 text-center align-middle">
@@ -1011,6 +1011,15 @@ const Lancamentos: React.FC = () => {
                           {exp.category}
                         </Badge>
                       </td>
+                      <td className="px-6 py-5 text-left align-middle truncate max-w-0">
+                        {exp.description ? (
+                          <span className="text-[12px] text-slate-500 font-medium truncate block" title={exp.description}>
+                            {exp.description}
+                          </span>
+                        ) : (
+                          <span className="text-[12px] text-slate-400 italic">--</span>
+                        )}
+                      </td>
                       <td className="px-6 py-5 text-center align-middle">
                         <div className="flex flex-col items-center gap-1.5">
                           <div className={`size-9 rounded-xl ${getPaymentStyle(exp.paymentMethod).bg} flex items-center justify-center group-hover:rotate-12 transition-transform duration-300`}>
@@ -1023,15 +1032,20 @@ const Lancamentos: React.FC = () => {
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-5 text-left align-middle">
+                      <td className="px-6 py-5 text-right align-middle">
                         <span className="text-[16px] font-black dark:text-white tabular-nums">
                           R$ {exp.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </span>
                       </td>
+                      <td className="px-6 py-5 text-left align-middle">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[13px] text-[#636f88] dark:text-gray-400 font-bold">{exp.collaborator}</span>
+                        </div>
+                      </td>
                     </tr>
                     {expandedId === exp.id && (
                       <tr className="bg-slate-50/30 dark:bg-slate-800/10 animate-in fade-in slide-in-from-top-1 duration-300">
-                        <td colSpan={7} className="px-8 py-8">
+                        <td colSpan={8} className="px-8 py-8">
                           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
                             <div className="flex flex-wrap gap-12">
                               <div className="flex flex-col gap-1.5">
@@ -1055,6 +1069,15 @@ const Lancamentos: React.FC = () => {
                                 </p>
                                 <p className="text-sm font-bold text-slate-700 dark:text-gray-300">{formatDate(exp.date)}</p>
                               </div>
+                              {exp.description && (
+                                <div className="flex flex-col gap-1.5 w-full mt-2">
+                                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-[14px]">description</span>
+                                    Descrição
+                                  </p>
+                                  <p className="text-sm font-bold text-slate-700 dark:text-gray-300 whitespace-pre-wrap">{exp.description}</p>
+                                </div>
+                              )}
                             </div>
                             <div className="flex gap-3 w-full lg:w-auto pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-100 dark:border-slate-800">
                               <Button variant="secondary" size="md" onClick={() => handlePrintExpense(exp)} icon="print" className="flex-1 lg:flex-none shadow-sm h-11">
@@ -1079,7 +1102,7 @@ const Lancamentos: React.FC = () => {
                 ))}
                 {filteredExpenses.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <EmptyState
                         icon="payments"
                         title="Nenhum lançamento"
@@ -1154,6 +1177,14 @@ const Lancamentos: React.FC = () => {
               required
             />
           </div>
+
+          <Input
+            label="Descrição"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Opcional: detalhes da despesa..."
+            icon="description"
+          />
 
           <div className="pt-4 flex flex-col gap-6">
             <div className="flex flex-col gap-3">
